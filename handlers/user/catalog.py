@@ -1,9 +1,10 @@
 from aiogram import types
 
-from keyboards.inline import categories_kb, products_kb
+from keyboards.inline import categories_kb, product_item_kb
 from loader import db, dp
 
 
+@dp.message_handler(commands=["menu"])
 @dp.message_handler(lambda m: m.text == "🛍 Каталог")
 async def show_categories(message: types.Message) -> None:
     categories = await db.get_categories()
@@ -20,7 +21,17 @@ async def show_products(call: types.CallbackQuery) -> None:
     if not products:
         await call.answer("В этой категории пока нет товаров.", show_alert=True)
         return
-    await call.message.answer("Товары категории:", reply_markup=products_kb(products))
+
+    for product in products:
+        caption = f"<b>{product['name']}</b>\n💵 Цена: {float(product['price']):.2f}"
+        if product["photo_file_id"]:
+            await call.message.answer_photo(
+                product["photo_file_id"],
+                caption=caption,
+                reply_markup=product_item_kb(int(product["id"])),
+            )
+        else:
+            await call.message.answer(caption, reply_markup=product_item_kb(int(product["id"])))
     await call.answer()
 
 

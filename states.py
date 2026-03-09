@@ -14,6 +14,7 @@ class AddProductState(StatesGroup):
     waiting_for_name = State()
     waiting_for_price = State()
     waiting_for_category = State()
+    waiting_for_photo = State()
 
 
 class EditPriceState(StatesGroup):
@@ -24,3 +25,17 @@ class EditPriceState(StatesGroup):
 class AddBalanceState(StatesGroup):
     waiting_for_user_id = State()
     waiting_for_amount = State()
+
+
+class CheckoutState(StatesGroup):
+    waiting_for_address = State()
+    waiting_for_phone = State()
+
+
+class SosState(StatesGroup):
+    waiting_for_message = State()
+
+
+class AdminReplySosState(StatesGroup):
+    waiting_for_ticket_id = State()
+    waiting_for_reply = State()

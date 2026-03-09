@@ -8,15 +8,9 @@ def categories_kb(categories) -> InlineKeyboardMarkup:
     return kb
 
 
-def products_kb(products) -> InlineKeyboardMarkup:
+def product_item_kb(product_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    for product in products:
-        kb.add(
-            InlineKeyboardButton(
-                f"{product['name']} — {float(product['price']):.2f}",
-                callback_data=f"addcart:{product['id']}",
-            )
-        )
+    kb.add(InlineKeyboardButton("🛒 Добавить в корзину", callback_data=f"addcart:{product_id}"))
     return kb
 
 

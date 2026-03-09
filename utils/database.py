@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import Any, Optional
+
 import asyncpg
-from typing import Any, Iterable, Optional
 
 
 class Database:
@@ -75,11 +76,13 @@ class Database:
                 category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
                 price NUMERIC(12,2) NOT NULL CHECK (price >= 0),
+                photo_file_id TEXT,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
         )
+        await self.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS photo_file_id TEXT")
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS cart_items (
@@ -96,11 +99,15 @@ class Database:
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
                 total_amount NUMERIC(12,2) NOT NULL,
+                phone TEXT,
+                address TEXT,
                 status TEXT NOT NULL DEFAULT 'paid',
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
         )
+        await self.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS phone TEXT")
+        await self.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS address TEXT")
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS order_items (
@@ -110,6 +117,21 @@ class Database:
                 product_name TEXT NOT NULL,
                 price NUMERIC(12,2) NOT NULL,
                 quantity INTEGER NOT NULL CHECK (quantity > 0)
+            )
+            """
+        )
+        await self.execute(
+            """
+            CREATE TABLE IF NOT EXISTS support_tickets (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                username TEXT,
+                full_name TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_reply TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                answered_at TIMESTAMPTZ
             )
             """
         )
@@ -155,24 +177,25 @@ class Database:
     async def get_category(self, category_id: int):
         return await self.fetchrow("SELECT id, name FROM categories WHERE id = $1", category_id)
 
-    async def add_product(self, category_id: int, name: str, price: float) -> None:
+    async def add_product(self, category_id: int, name: str, price: float, photo_file_id: str | None = None) -> None:
         await self.execute(
-            "INSERT INTO products (category_id, name, price) VALUES ($1, $2, $3)",
+            "INSERT INTO products (category_id, name, price, photo_file_id) VALUES ($1, $2, $3, $4)",
             category_id,
             name,
             price,
+            photo_file_id,
         )
 
     async def get_products_by_category(self, category_id: int):
         return await self.fetch(
-            "SELECT id, name, price FROM products WHERE category_id = $1 AND is_active = TRUE ORDER BY id",
+            "SELECT id, name, price, photo_file_id FROM products WHERE category_id = $1 AND is_active = TRUE ORDER BY id",
             category_id,
         )
 
     async def get_all_products(self):
         return await self.fetch(
             """
-            SELECT p.id, p.name, p.price, c.name AS category_name
+            SELECT p.id, p.name, p.price, p.photo_file_id, c.name AS category_name
             FROM products p
             JOIN categories c ON c.id = p.category_id
             WHERE p.is_active = TRUE
@@ -182,7 +205,7 @@ class Database:
 
     async def get_product(self, product_id: int):
         return await self.fetchrow(
-            "SELECT id, category_id, name, price, is_active FROM products WHERE id = $1",
+            "SELECT id, category_id, name, price, photo_file_id, is_active FROM products WHERE id = $1",
             product_id,
         )
 
@@ -223,7 +246,7 @@ class Database:
     async def clear_cart(self, user_id: int) -> None:
         await self.execute("DELETE FROM cart_items WHERE user_id = $1", user_id)
 
-    async def create_order_from_cart(self, user_id: int) -> int:
+    async def create_order_from_cart(self, user_id: int, address: str, phone: str) -> int:
         cart_items = await self.get_cart(user_id)
         if not cart_items:
             raise ValueError("Cart is empty")
@@ -244,9 +267,11 @@ class Database:
                     total_amount,
                 )
                 order_id = await conn.fetchval(
-                    "INSERT INTO orders (user_id, total_amount) VALUES ($1, $2) RETURNING id",
+                    "INSERT INTO orders (user_id, total_amount, address, phone) VALUES ($1, $2, $3, $4) RETURNING id",
                     user_id,
                     total_amount,
+                    address,
+                    phone,
                 )
                 for item in cart_items:
                     await conn.execute(
@@ -265,11 +290,41 @@ class Database:
 
     async def get_user_orders(self, user_id: int):
         return await self.fetch(
-            "SELECT id, total_amount, status, created_at FROM orders WHERE user_id = $1 ORDER BY id DESC",
+            "SELECT id, total_amount, address, phone, status, created_at FROM orders WHERE user_id = $1 ORDER BY id DESC",
             user_id,
         )
 
     async def get_all_orders(self):
         return await self.fetch(
-            "SELECT id, user_id, total_amount, status, created_at FROM orders ORDER BY id DESC LIMIT 50"
+            "SELECT id, user_id, total_amount, address, phone, status, created_at FROM orders ORDER BY id DESC LIMIT 50"
+        )
+
+    async def create_support_ticket(self, user_id: int, username: str | None, full_name: str, message: str) -> int:
+        return int(
+            await self.fetchval(
+                """
+                INSERT INTO support_tickets (user_id, username, full_name, message)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+                """,
+                user_id,
+                username,
+                full_name,
+                message,
+            )
+        )
+
+    async def get_open_tickets(self):
+        return await self.fetch(
+            "SELECT id, user_id, username, full_name, message, created_at FROM support_tickets WHERE status = 'open' ORDER BY id DESC"
+        )
+
+    async def get_ticket(self, ticket_id: int):
+        return await self.fetchrow("SELECT * FROM support_tickets WHERE id = $1", ticket_id)
+
+    async def answer_ticket(self, ticket_id: int, reply_text: str) -> None:
+        await self.execute(
+            "UPDATE support_tickets SET status = 'answered', admin_reply = $2, answered_at = NOW() WHERE id = $1",
+            ticket_id,
+            reply_text,
         )
