@@ -10,7 +10,7 @@ from states import AddBalanceState, AddCategoryState, AddProductState, EditPrice
 dp.filters_factory.bind(IsAdminSession)
 
 
-@dp.message_handler(lambda m: m.text == "🚪 Выйти из админки", is_admin_session=True, state="*")
+@dp.message_handler(lambda m: m.text == "🚪 Выйти из админки", state="*")
 async def admin_logout(message: types.Message, state: FSMContext) -> None:
     await db.set_admin_session(message.from_user.id, False)
     await state.finish()
