@@ -17,13 +17,13 @@ async def admin_logout(message: types.Message, state: FSMContext) -> None:
     await message.answer("Ты вышел из админки.", reply_markup=main_menu())
 
 
-@dp.message_handler(lambda m: m.text == "➕ Добавить категорию", is_admin_session=True)
+@dp.message_handler(lambda m: m.text == "➕ Добавить категорию")
 async def add_category_start(message: types.Message) -> None:
     await AddCategoryState.waiting_for_name.set()
     await message.answer("Введи название новой категории:")
 
 
-@dp.message_handler(state=AddCategoryState.waiting_for_name, is_admin_session=True)
+@dp.message_handler(state=AddCategoryState.waiting_for_name)
 async def add_category_finish(message: types.Message, state: FSMContext) -> None:
     name = message.text.strip()
     await db.add_category(name)
@@ -31,20 +31,20 @@ async def add_category_finish(message: types.Message, state: FSMContext) -> None
     await message.answer(f"Категория <b>{name}</b> добавлена.", reply_markup=admin_menu())
 
 
-@dp.message_handler(lambda m: m.text == "➕ Добавить товар", is_admin_session=True)
+@dp.message_handler(lambda m: m.text == "➕ Добавить товар")
 async def add_product_start(message: types.Message) -> None:
     await AddProductState.waiting_for_name.set()
     await message.answer("Введи название товара:")
 
 
-@dp.message_handler(state=AddProductState.waiting_for_name, is_admin_session=True)
+@dp.message_handler(state=AddProductState.waiting_for_name)
 async def add_product_name(message: types.Message, state: FSMContext) -> None:
     await state.update_data(name=message.text.strip())
     await AddProductState.waiting_for_price.set()
     await message.answer("Введи цену товара:")
 
 
-@dp.message_handler(state=AddProductState.waiting_for_price, is_admin_session=True)
+@dp.message_handler(state=AddProductState.waiting_for_price)
 async def add_product_price(message: types.Message, state: FSMContext) -> None:
     try:
         price = float(message.text.replace(",", "."))
@@ -62,7 +62,7 @@ async def add_product_price(message: types.Message, state: FSMContext) -> None:
     await message.answer(text)
 
 
-@dp.message_handler(state=AddProductState.waiting_for_category, is_admin_session=True)
+@dp.message_handler(state=AddProductState.waiting_for_category)
 async def add_product_category(message: types.Message, state: FSMContext) -> None:
     try:
         category_id = int(message.text.strip())
@@ -79,7 +79,7 @@ async def add_product_category(message: types.Message, state: FSMContext) -> Non
     await message.answer("Товар добавлен.", reply_markup=admin_menu())
 
 
-@dp.message_handler(lambda m: m.text == "💲 Изменить цену", is_admin_session=True)
+@dp.message_handler(lambda m: m.text == "💲 Изменить цену")
 async def edit_price_start(message: types.Message) -> None:
     products = await db.get_all_products()
     if not products:
@@ -92,7 +92,7 @@ async def edit_price_start(message: types.Message) -> None:
     await message.answer(text + "\n\nВведи ID товара:")
 
 
-@dp.message_handler(state=EditPriceState.waiting_for_product_id, is_admin_session=True)
+@dp.message_handler(state=EditPriceState.waiting_for_product_id)
 async def edit_price_product(message: types.Message, state: FSMContext) -> None:
     try:
         product_id = int(message.text.strip())
@@ -108,7 +108,7 @@ async def edit_price_product(message: types.Message, state: FSMContext) -> None:
     await message.answer("Введи новую цену:")
 
 
-@dp.message_handler(state=EditPriceState.waiting_for_new_price, is_admin_session=True)
+@dp.message_handler(state=EditPriceState.waiting_for_new_price)
 async def edit_price_finish(message: types.Message, state: FSMContext) -> None:
     try:
         new_price = float(message.text.replace(",", "."))
@@ -121,13 +121,13 @@ async def edit_price_finish(message: types.Message, state: FSMContext) -> None:
     await message.answer("Цена обновлена.", reply_markup=admin_menu())
 
 
-@dp.message_handler(lambda m: m.text == "💳 Пополнить баланс", is_admin_session=True)
+@dp.message_handler(lambda m: m.text == "💳 Пополнить баланс")
 async def add_balance_start(message: types.Message) -> None:
     await AddBalanceState.waiting_for_user_id.set()
     await message.answer("Введи Telegram ID пользователя:")
 
 
-@dp.message_handler(state=AddBalanceState.waiting_for_user_id, is_admin_session=True)
+@dp.message_handler(state=AddBalanceState.waiting_for_user_id)
 async def add_balance_user(message: types.Message, state: FSMContext) -> None:
     try:
         user_id = int(message.text.strip())
@@ -143,7 +143,7 @@ async def add_balance_user(message: types.Message, state: FSMContext) -> None:
     await message.answer("Введи сумму пополнения:")
 
 
-@dp.message_handler(state=AddBalanceState.waiting_for_amount, is_admin_session=True)
+@dp.message_handler(state=AddBalanceState.waiting_for_amount)
 async def add_balance_finish(message: types.Message, state: FSMContext) -> None:
     try:
         amount = float(message.text.replace(",", "."))
@@ -156,7 +156,7 @@ async def add_balance_finish(message: types.Message, state: FSMContext) -> None:
     await message.answer("Баланс успешно пополнен.", reply_markup=admin_menu())
 
 
-@dp.message_handler(lambda m: m.text == "📋 Все товары", is_admin_session=True)
+@dp.message_handler(lambda m: m.text == "📋 Все товары")
 async def all_products(message: types.Message) -> None:
     products = await db.get_all_products()
     if not products:
@@ -168,7 +168,7 @@ async def all_products(message: types.Message) -> None:
     await message.answer("\n".join(lines))
 
 
-@dp.message_handler(lambda m: m.text == "📑 Все заказы", is_admin_session=True)
+@dp.message_handler(lambda m: m.text == "📑 Все заказы")
 async def all_orders(message: types.Message) -> None:
     orders = await db.get_all_orders()
     if not orders:
