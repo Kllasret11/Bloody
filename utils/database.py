@@ -51,6 +51,7 @@ class Database:
             )
             """
         )
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS admin_sessions (
@@ -60,6 +61,7 @@ class Database:
             )
             """
         )
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS categories (
@@ -69,6 +71,7 @@ class Database:
             )
             """
         )
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS products (
@@ -82,7 +85,9 @@ class Database:
             )
             """
         )
+
         await self.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS photo_file_id TEXT")
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS cart_items (
@@ -93,6 +98,7 @@ class Database:
             )
             """
         )
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS orders (
@@ -108,8 +114,12 @@ class Database:
             )
             """
         )
+
         await self.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS phone TEXT")
         await self.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS address TEXT")
+        await self.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION")
+        await self.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION")
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS order_items (
@@ -122,6 +132,7 @@ class Database:
             )
             """
         )
+
         await self.execute(
             """
             CREATE TABLE IF NOT EXISTS support_tickets (
@@ -171,7 +182,10 @@ class Database:
         return bool(row and row["is_logged_in"])
 
     async def add_category(self, name: str) -> None:
-        await self.execute("INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", name)
+        await self.execute(
+            "INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
+            name,
+        )
 
     async def get_categories(self):
         return await self.fetch("SELECT id, name FROM categories ORDER BY id")
@@ -179,7 +193,13 @@ class Database:
     async def get_category(self, category_id: int):
         return await self.fetchrow("SELECT id, name FROM categories WHERE id = $1", category_id)
 
-    async def add_product(self, category_id: int, name: str, price: float, photo_file_id: str | None = None) -> None:
+    async def add_product(
+        self,
+        category_id: int,
+        name: str,
+        price: float,
+        photo_file_id: str | None = None,
+    ) -> None:
         await self.execute(
             "INSERT INTO products (category_id, name, price, photo_file_id) VALUES ($1, $2, $3, $4)",
             category_id,
@@ -190,7 +210,12 @@ class Database:
 
     async def get_products_by_category(self, category_id: int):
         return await self.fetch(
-            "SELECT id, name, price, photo_file_id FROM products WHERE category_id = $1 AND is_active = TRUE ORDER BY id",
+            """
+            SELECT id, name, price, photo_file_id
+            FROM products
+            WHERE category_id = $1 AND is_active = TRUE
+            ORDER BY id
+            """,
             category_id,
         )
 
@@ -207,7 +232,11 @@ class Database:
 
     async def get_product(self, product_id: int):
         return await self.fetchrow(
-            "SELECT id, category_id, name, price, photo_file_id, is_active FROM products WHERE id = $1",
+            """
+            SELECT id, category_id, name, price, photo_file_id, is_active
+            FROM products
+            WHERE id = $1
+            """,
             product_id,
         )
 
@@ -221,24 +250,28 @@ class Database:
             amount,
         )
 
-    async def add_to_cart(self, user_id: int, product_id: int, quantity: int = 1):
-
+    async def add_to_cart(self, user_id: int, product_id: int, quantity: int = 1) -> None:
+        quantity = max(1, int(quantity))
         await self.execute(
             """
             INSERT INTO cart_items (user_id, product_id, quantity)
-            VALUES ($1, $2, $3) ON CONFLICT (user_id, product_id)
-            DO
-            UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, product_id)
+            DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
             """,
             user_id,
             product_id,
-            quantity
+            quantity,
         )
 
     async def get_cart(self, user_id: int):
         return await self.fetch(
             """
-            SELECT c.product_id, c.quantity, p.name, p.price
+            SELECT
+                c.product_id,
+                c.quantity,
+                p.name,
+                p.price
             FROM cart_items c
             JOIN products p ON p.id = c.product_id
             WHERE c.user_id = $1
@@ -247,18 +280,37 @@ class Database:
             user_id,
         )
 
+    async def remove_cart_item(self, product_id: int, user_id: int) -> None:
+        await self.execute(
+            """
+            DELETE FROM cart_items
+            WHERE product_id = $1 AND user_id = $2
+            """,
+            product_id,
+            user_id,
+        )
+
     async def clear_cart(self, user_id: int) -> None:
         await self.execute("DELETE FROM cart_items WHERE user_id = $1", user_id)
 
-    async def create_order_from_cart(self, user_id: int, address: str, phone: str) -> int:
+    async def create_order_from_cart(
+        self,
+        user_id: int,
+        phone: str,
+        address: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+    ) -> int:
         cart_items = await self.get_cart(user_id)
         if not cart_items:
             raise ValueError("Cart is empty")
 
         total_amount = sum(float(item["price"]) * int(item["quantity"]) for item in cart_items)
+
         user = await self.get_user(user_id)
         if user is None:
             raise ValueError("User not found")
+
         current_balance = float(user["balance"])
         if current_balance < total_amount:
             raise RuntimeError("INSUFFICIENT_FUNDS")
@@ -270,13 +322,21 @@ class Database:
                     user_id,
                     total_amount,
                 )
+
                 order_id = await conn.fetchval(
-                    "INSERT INTO orders (user_id, total_amount, address, phone) VALUES ($1, $2, $3, $4) RETURNING id",
+                    """
+                    INSERT INTO orders (user_id, total_amount, phone, address, latitude, longitude)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING id
+                    """,
                     user_id,
                     total_amount,
-                    address,
                     phone,
+                    address,
+                    latitude,
+                    longitude,
                 )
+
                 for item in cart_items:
                     await conn.execute(
                         """
@@ -289,21 +349,39 @@ class Database:
                         item["price"],
                         item["quantity"],
                     )
+
                 await conn.execute("DELETE FROM cart_items WHERE user_id = $1", user_id)
+
         return int(order_id)
 
     async def get_user_orders(self, user_id: int):
         return await self.fetch(
-            "SELECT id, total_amount, address, phone, status, created_at FROM orders WHERE user_id = $1 ORDER BY id DESC",
+            """
+            SELECT id, total_amount, address, phone, latitude, longitude, status, created_at
+            FROM orders
+            WHERE user_id = $1
+            ORDER BY id DESC
+            """,
             user_id,
         )
 
     async def get_all_orders(self):
         return await self.fetch(
-            "SELECT id, user_id, total_amount, address, phone, status, created_at FROM orders ORDER BY id DESC LIMIT 50"
+            """
+            SELECT id, user_id, total_amount, address, phone, latitude, longitude, status, created_at
+            FROM orders
+            ORDER BY id DESC
+            LIMIT 50
+            """
         )
 
-    async def create_support_ticket(self, user_id: int, username: str | None, full_name: str, message: str) -> int:
+    async def create_support_ticket(
+        self,
+        user_id: int,
+        username: str | None,
+        full_name: str,
+        message: str,
+    ) -> int:
         return int(
             await self.fetchval(
                 """
@@ -320,7 +398,12 @@ class Database:
 
     async def get_open_tickets(self):
         return await self.fetch(
-            "SELECT id, user_id, username, full_name, message, created_at FROM support_tickets WHERE status = 'open' ORDER BY id DESC"
+            """
+            SELECT id, user_id, username, full_name, message, created_at
+            FROM support_tickets
+            WHERE status = 'open'
+            ORDER BY id DESC
+            """
         )
 
     async def get_ticket(self, ticket_id: int):
@@ -328,90 +411,11 @@ class Database:
 
     async def answer_ticket(self, ticket_id: int, reply_text: str) -> None:
         await self.execute(
-            "UPDATE support_tickets SET status = 'answered', admin_reply = $2, answered_at = NOW() WHERE id = $1",
+            """
+            UPDATE support_tickets
+            SET status = 'answered', admin_reply = $2, answered_at = NOW()
+            WHERE id = $1
+            """,
             ticket_id,
             reply_text,
         )
-
-async def remove_cart_item(self, item_id: int, user_id: int):
-    await self.execute(
-        """
-        DELETE FROM cart_items
-        WHERE id = $1 AND user_id = $2
-        """,
-        item_id,
-        user_id
-    )
-
-async def create_order_from_cart(
-    self,
-    user_id: int,
-    phone: str,
-    address: str | None = None,
-    latitude: float | None = None,
-    longitude: float | None = None,
-):
-
-    cart_items = await self.fetch(
-        """
-        SELECT c.id, c.quantity, p.price
-        FROM cart_items c
-        JOIN products p ON p.id = c.product_id
-        WHERE c.user_id = $1
-        """,
-        user_id
-    )
-
-    if not cart_items:
-        raise ValueError("CART_EMPTY")
-
-    total = 0
-
-    for item in cart_items:
-        total += float(item["price"]) * int(item["quantity"])
-
-    balance = await self.fetchval(
-        "SELECT balance FROM users WHERE user_id=$1",
-        user_id
-    )
-
-    if balance < total:
-        raise RuntimeError("INSUFFICIENT_FUNDS")
-
-    await self.execute(
-        "UPDATE users SET balance = balance - $1 WHERE user_id=$2",
-        total,
-        user_id
-    )
-
-    order_id = await self.fetchval(
-        """
-        INSERT INTO orders(user_id, phone, address, latitude, longitude, total)
-        VALUES ($1,$2,$3,$4,$5,$6)
-        RETURNING id
-        """,
-        user_id,
-        phone,
-        address,
-        latitude,
-        longitude,
-        total
-    )
-
-    for item in cart_items:
-        await self.execute(
-            """
-            INSERT INTO order_items(order_id, product_id, quantity)
-            VALUES ($1,$2,$3)
-            """,
-            order_id,
-            item["id"],
-            item["quantity"]
-        )
-
-    await self.execute(
-        "DELETE FROM cart_items WHERE user_id=$1",
-        user_id
-    )
-
-    return order_id
