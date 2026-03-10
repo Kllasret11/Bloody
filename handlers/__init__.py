@@ -1,4 +1,2 @@
-from loader import dp
-
-from . import admin
-from . import user
+from . import admin  # noqa: F401
+from . import user  # noqa: F401
