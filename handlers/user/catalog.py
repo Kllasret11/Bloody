@@ -1,66 +1,75 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram import types
 
-MIN_QTY = 1
-MAX_QTY = 99
+from keyboards.inline import categories_kb, product_item_kb
+from loader import db, dp
 
 
-def categories_kb(categories) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=1)
-    for category in categories:
-        kb.add(
-            InlineKeyboardButton(
-                text=category.get("name", "Категория"),
-                callback_data=f"cat:{category.get('id')}"
+@dp.message_handler(commands=["menu"])
+@dp.message_handler(lambda m: m.text == "🛍 Каталог")
+async def show_categories(message: types.Message):
+    categories = await db.get_categories()
+
+    if not categories:
+        await message.answer("Категории пока не добавлены.")
+        return
+
+    await message.answer(
+        "Выбери категорию:",
+        reply_markup=categories_kb(categories)
+    )
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith("cat:"))
+async def show_products(call: types.CallbackQuery):
+
+    category_id = int(call.data.split(":")[1])
+
+    products = await db.get_products_by_category(category_id)
+
+    if not products:
+        await call.answer("В этой категории пока нет товаров.", show_alert=True)
+        return
+
+    for product in products:
+
+        name = product.get("name", "Товар")
+        price = float(product.get("price", 0))
+        photo = product.get("photo_file_id")
+
+        caption = (
+            f"<b>{name}</b>\n"
+            f"💰 Цена: {price:.2f}"
+        )
+
+        if photo:
+            await call.message.answer_photo(
+                photo,
+                caption=caption,
+                reply_markup=product_item_kb(int(product["id"]), 1)
             )
-        )
-    return kb
+        else:
+            await call.message.answer(
+                caption,
+                reply_markup=product_item_kb(int(product["id"]), 1)
+            )
+
+    await call.answer()
 
 
-def product_item_kb(product_id: int, qty: int = 1) -> InlineKeyboardMarkup:
-    qty = max(MIN_QTY, min(MAX_QTY, int(qty)))
+@dp.callback_query_handler(lambda c: c.data.startswith("addcart:"))
+async def add_to_cart(call: types.CallbackQuery):
 
-    kb = InlineKeyboardMarkup(row_width=3)
+    data = call.data.split(":")
 
-    kb.row(
-        InlineKeyboardButton(
-            text="➖",
-            callback_data=f"qty:{product_id}:{qty}:minus"
-        ),
-        InlineKeyboardButton(
-            text=f"{qty}",
-            callback_data="qty:noop"
-        ),
-        InlineKeyboardButton(
-            text="➕",
-            callback_data=f"qty:{product_id}:{qty}:plus"
-        ),
-    )
+    if len(data) == 3:
+        _, product_id, quantity = data
+    else:
+        _, product_id = data
+        quantity = 1
 
-    kb.add(
-        InlineKeyboardButton(
-            text="🛒 Добавить в корзину",
-            callback_data=f"addcart:{product_id}:{qty}"
-        )
-    )
+    product_id = int(product_id)
+    quantity = int(quantity)
 
-    return kb
+    await db.add_to_cart(call.from_user.id, product_id, quantity)
 
-
-def cart_kb(item_id: int) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=2)
-
-    kb.add(
-        InlineKeyboardButton(
-            text="❌ Удалить",
-            callback_data=f"cartdel:{item_id}"
-        )
-    )
-
-    kb.add(
-        InlineKeyboardButton(
-            text="✅ Оформить заказ",
-            callback_data="checkout"
-        )
-    )
-
-    return kb
+    await call.answer(f"Добавлено в корзину: {quantity} шт.")
