@@ -1,97 +1,201 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
-from keyboards.inline import cart_kb
+from keyboards.inline import cart_item_kb, checkout_kb
+from keyboards.reply import (
+    contact_request_menu,
+    delivery_method_menu,
+    location_request_menu,
+    main_menu,
+    remove_keyboard,
+)
 from loader import db, dp
 from states import CheckoutState
+
+
+def _delivery_text(address: str | None, latitude: float | None = None, longitude: float | None = None) -> str:
+    if address:
+        return address
+    if latitude is not None and longitude is not None:
+        return f"Геопозиция: {latitude:.6f}, {longitude:.6f}"
+    return "-"
 
 
 @dp.message_handler(lambda m: m.text == "🛒 Корзина")
 async def show_cart(message: types.Message) -> None:
     cart_items = await db.get_cart(message.from_user.id)
+
     if not cart_items:
         await message.answer("Корзина пуста.")
         return
 
     total = 0.0
-    lines = ["<b>Корзина</b>"]
+
     for item in cart_items:
-        item_total = float(item["price"]) * int(item["quantity"])
+        price = float(item.get("price", 0))
+        qty = int(item.get("quantity", 1))
+        item_total = price * qty
         total += item_total
-        lines.append(f"• {item['name']} × {item['quantity']} = {item_total:.2f}")
-    lines.append(f"\n<b>Итого:</b> {total:.2f}")
-    await message.answer("\n".join(lines), reply_markup=cart_kb())
+
+        text = (
+            f"<b>{item.get('name', 'Товар')}</b>\n"
+            f"💰 Цена: {price:.2f}\n"
+            f"🔢 Количество: {qty}\n"
+            f"🧾 Сумма: {item_total:.2f}"
+        )
+
+        await message.answer(
+            text,
+            reply_markup=cart_item_kb(int(item["id"]))
+        )
+
+    await message.answer(
+        f"<b>Итого:</b> {total:.2f}",
+        reply_markup=checkout_kb()
+    )
 
 
-@dp.callback_query_handler(lambda c: c.data == "clearcart")
-async def clear_cart(call: types.CallbackQuery) -> None:
-    await db.clear_cart(call.from_user.id)
-    await call.message.answer("Корзина очищена.")
-    await call.answer()
+@dp.callback_query_handler(lambda c: c.data.startswith("cartdel:"))
+async def remove_cart_item(call: types.CallbackQuery) -> None:
+    item_id = int(call.data.split(":", 1)[1])
+    await db.remove_cart_item(item_id, call.from_user.id)
+    await call.answer("Товар удалён из корзины")
+    await call.message.edit_reply_markup()
 
 
 @dp.callback_query_handler(lambda c: c.data == "checkout")
-async def checkout(call: types.CallbackQuery, state: FSMContext) -> None:
+async def start_checkout(call: types.CallbackQuery, state: FSMContext) -> None:
     cart_items = await db.get_cart(call.from_user.id)
+
     if not cart_items:
         await call.answer("Корзина пуста.", show_alert=True)
         return
-    await CheckoutState.waiting_for_address.set()
-    await call.message.answer("Введи адрес доставки:")
+
+    await state.finish()
+    await CheckoutState.waiting_for_phone.set()
+
+    await call.message.answer(
+        "Нажми кнопку ниже, чтобы отправить номер телефона.",
+        reply_markup=contact_request_menu(),
+    )
     await call.answer()
+
+
+@dp.message_handler(content_types=types.ContentType.CONTACT, state=CheckoutState.waiting_for_phone)
+async def checkout_phone_contact(message: types.Message, state: FSMContext) -> None:
+    contact = message.contact
+
+    if not contact:
+        await message.answer("Не удалось получить контакт. Попробуй ещё раз.")
+        return
+
+    if contact.user_id and contact.user_id != message.from_user.id:
+        await message.answer("Отправь, пожалуйста, свой собственный номер телефона.")
+        return
+
+    await state.update_data(phone=contact.phone_number)
+    await CheckoutState.waiting_for_delivery_method.set()
+
+    await message.answer(
+        "Как указать место доставки?",
+        reply_markup=delivery_method_menu(),
+    )
+
+
+@dp.message_handler(state=CheckoutState.waiting_for_phone)
+async def checkout_phone_invalid(message: types.Message) -> None:
+    await message.answer(
+        "Нужно отправить номер через кнопку ниже.",
+        reply_markup=contact_request_menu(),
+    )
+
+
+@dp.message_handler(lambda m: m.text == "✍️ Ввести адрес вручную", state=CheckoutState.waiting_for_delivery_method)
+@dp.message_handler(lambda m: m.text == "✍️ Ввести адрес вручную", state=CheckoutState.waiting_for_location)
+async def checkout_manual_address(message: types.Message) -> None:
+    await CheckoutState.waiting_for_address.set()
+    await message.answer(
+        "Введи адрес доставки вручную:",
+        reply_markup=remove_keyboard(),
+    )
+
+
+@dp.message_handler(lambda m: m.text == "📍 Отправить геопозицию", state=CheckoutState.waiting_for_delivery_method)
+async def checkout_request_location(message: types.Message) -> None:
+    await CheckoutState.waiting_for_location.set()
+    await message.answer(
+        "Нажми кнопку ниже и отправь геопозицию доставки.",
+        reply_markup=location_request_menu(),
+    )
+
+
+@dp.message_handler(content_types=types.ContentType.LOCATION, state=CheckoutState.waiting_for_location)
+async def checkout_location(message: types.Message, state: FSMContext) -> None:
+    location = message.location
+    data = await state.get_data()
+
+    try:
+        order_id = await db.create_order_from_cart(
+            user_id=message.from_user.id,
+            phone=data["phone"],
+            latitude=location.latitude,
+            longitude=location.longitude,
+        )
+    except ValueError:
+        await state.finish()
+        await message.answer("Корзина пуста.", reply_markup=main_menu())
+        return
+    except RuntimeError as exc:
+        await state.finish()
+        if str(exc) == "INSUFFICIENT_FUNDS":
+            await message.answer("Недостаточно средств на балансе.", reply_markup=main_menu())
+            return
+        raise
+
+    await state.finish()
+    await message.answer(
+        f"Заказ №{order_id} успешно оформлен.\n📍 {_delivery_text(None, location.latitude, location.longitude)}\n📞 {data['phone']}",
+        reply_markup=main_menu(),
+    )
+
+
+@dp.message_handler(state=CheckoutState.waiting_for_location)
+async def checkout_location_invalid(message: types.Message) -> None:
+    await message.answer(
+        "Отправь геопозицию кнопкой ниже или выбери ввод адреса вручную.",
+        reply_markup=location_request_menu(),
+    )
 
 
 @dp.message_handler(state=CheckoutState.waiting_for_address)
 async def checkout_address(message: types.Message, state: FSMContext) -> None:
     address = message.text.strip()
+
     if len(address) < 5:
         await message.answer("Адрес слишком короткий. Введи полный адрес.")
         return
-    await state.update_data(address=address)
-    await CheckoutState.waiting_for_phone.set()
-    await message.answer("Введи номер телефона для связи:")
 
-
-@dp.message_handler(state=CheckoutState.waiting_for_phone)
-async def checkout_phone(message: types.Message, state: FSMContext) -> None:
-    phone = message.text.strip()
     data = await state.get_data()
+
     try:
-        order_id = await db.create_order_from_cart(message.from_user.id, data["address"], phone)
+        order_id = await db.create_order_from_cart(
+            user_id=message.from_user.id,
+            phone=data["phone"],
+            address=address,
+        )
     except ValueError:
         await state.finish()
-        await message.answer("Корзина пуста.")
+        await message.answer("Корзина пуста.", reply_markup=main_menu())
         return
     except RuntimeError as exc:
         await state.finish()
         if str(exc) == "INSUFFICIENT_FUNDS":
-            await message.answer("Недостаточно средств на балансе.")
+            await message.answer("Недостаточно средств на балансе.", reply_markup=main_menu())
             return
         raise
 
     await state.finish()
-    await message.answer(f"Заказ №{order_id} успешно оформлен и оплачен.")
-
-@dp.message_handler(content_types=['contact'], state=CheckoutState.waiting_for_phone)
-async def get_phone(message: types.Message, state: FSMContext):
-    phone = message.contact.phone_number
-    await state.update_data(phone=phone)
-    await message.answer("Теперь отправьте геопозицию доставки 📍")
-
-@dp.message_handler(content_types=['location'], state=CheckoutState.waiting_for_location)
-async def get_location(message: types.Message, state: FSMContext):
-    latitude = message.location.latitude
-    longitude = message.location.longitude
-
-    data = await state.get_data()
-    phone = data.get("phone")
-
-    await db.create_order(
-        user_id=message.from_user.id,
-        phone=phone,
-        latitude=latitude,
-        longitude=longitude
+    await message.answer(
+        f"Заказ №{order_id} успешно оформлен.\n📍 {address}\n📞 {data['phone']}",
+        reply_markup=main_menu(),
     )
-
-    await message.answer("✅ Заказ оформлен!")
-    await state.finish()
