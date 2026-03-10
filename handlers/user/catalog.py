@@ -36,10 +36,13 @@ async def show_products(call: types.CallbackQuery) -> None:
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("addcart:"))
-async def add_to_cart(call: types.CallbackQuery) -> None:
-    product_id = int(call.data.split(":", 1)[1])
-    await db.add_to_cart(user_id, product_id, quantity)
-    await call.answer("Товар добавлен в корзину")
+async def add_to_cart(call: types.CallbackQuery):
+    _, product_id, quantity = call.data.split(":")
+    product_id = int(product_id)
+    quantity = int(quantity)
+
+    await db.add_to_cart(call.from_user.id, product_id, quantity)
+    await call.answer(f"Товар добавлен в корзину: {quantity} шт.")
 
 @dp.callback_query_handler(lambda c: c.data.startswith("qty_plus"))
 async def qty_plus(call: types.CallbackQuery):
