@@ -1,6 +1,5 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-
 MIN_QTY = 1
 MAX_QTY = 99
 
@@ -21,10 +20,7 @@ def product_item_kb(product_id: int, qty: int = 1) -> InlineKeyboardMarkup:
         InlineKeyboardButton("➕", callback_data=f"qty:{product_id}:{qty}:plus"),
     )
     kb.add(
-        InlineKeyboardButton(
-            "🛒 Добавить в корзину",
-            callback_data=f"addcart:{product_id}:{qty}"
-        )
+        InlineKeyboardButton("🛒 Добавить в корзину", callback_data=f"addcart:{product_id}:{qty}")
     )
     return kb
 
