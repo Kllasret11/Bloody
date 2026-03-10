@@ -1,9 +1,4 @@
+from loader import dp
 
-from .admin import *
-from .user import *
-
-from .admin import dp
-from .user import dp
-
-__all__ = ["dp"]
-
+from . import admin
+from . import user
