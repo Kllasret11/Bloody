@@ -1,31 +1,43 @@
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 
 def main_menu() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add(KeyboardButton("🛍 Каталог"), KeyboardButton("🛒 Корзина"))
-    kb.add(KeyboardButton("👤 Профиль"), KeyboardButton("📦 Мои заказы"))
+    kb.add(KeyboardButton("📦 Мои заказы"), KeyboardButton("👤 Профиль"))
     kb.add(KeyboardButton("🆘 SOS"))
     return kb
 
 
 def admin_menu() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(KeyboardButton("➕ Добавить категорию"), KeyboardButton("➕ Добавить товар"))
-    kb.add(KeyboardButton("💲 Изменить цену"), KeyboardButton("💳 Пополнить баланс"))
-    kb.add(KeyboardButton("📋 Все товары"), KeyboardButton("📑 Все заказы"))
-    kb.add(KeyboardButton("🆘 Обращения"), KeyboardButton("✉️ Ответить на SOS"))
+    kb.add(KeyboardButton("📊 Статистика"), KeyboardButton("📦 Заказы"))
+    kb.add(KeyboardButton("➕ Добавить товар"), KeyboardButton("➕ Добавить категорию"))
+    kb.add(KeyboardButton("💰 Изменить баланс"), KeyboardButton("🆘 Обращения"))
+    kb.add(KeyboardButton("✉️ Ответить на SOS"))
     kb.add(KeyboardButton("🚪 Выйти из админки"))
     return kb
 
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-def phone_keyboard():
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(KeyboardButton("📱 Отправить номер", request_contact=True))
+def contact_request_menu() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.add(KeyboardButton("📱 Отправить номер телефона", request_contact=True))
     return kb
 
-def location_keyboard():
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+
+def delivery_method_menu() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.add(KeyboardButton("📍 Отправить геопозицию"))
+    kb.add(KeyboardButton("✍️ Ввести адрес вручную"))
+    return kb
+
+
+def location_request_menu() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     kb.add(KeyboardButton("📍 Отправить геопозицию", request_location=True))
+    kb.add(KeyboardButton("✍️ Ввести адрес вручную"))
     return kb
+
+
+def remove_keyboard() -> ReplyKeyboardRemove:
+    return ReplyKeyboardRemove()
