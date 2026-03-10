@@ -41,3 +41,26 @@ class SosState(StatesGroup):
 class AdminReplySosState(StatesGroup):
     waiting_for_ticket_id = State()
     waiting_for_reply = State()
+
+
+# ===== НОВЫЕ СОСТОЯНИЯ =====
+
+class DeleteProductState(StatesGroup):
+    waiting_for_product_id = State()
+
+
+class DeleteCategoryState(StatesGroup):
+    waiting_for_category_id = State()
+
+
+class EditProductState(StatesGroup):
+    waiting_for_product_id = State()
+    waiting_for_new_name = State()
+    waiting_for_new_price = State()
+    waiting_for_new_photo = State()
+    waiting_for_new_category = State()
+
+
+class EditCategoryState(StatesGroup):
+    waiting_for_category_id = State()
+    waiting_for_new_name = State()

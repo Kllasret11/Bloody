@@ -9,7 +9,11 @@ from states import (
     AddCategoryState,
     AddProductState,
     AdminReplySosState,
+    DeleteCategoryState,
+    DeleteProductState,
+    EditCategoryState,
     EditPriceState,
+    EditProductState,
 )
 
 
@@ -36,6 +40,9 @@ async def admin_logout(message: types.Message, state: FSMContext) -> None:
     await message.answer("Ты вышел из админки.", reply_markup=main_menu())
 
 
+# =========================
+# ДОБАВЛЕНИЕ КАТЕГОРИИ
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "➕ Добавить категорию")
 async def add_category_start(message: types.Message) -> None:
     await AddCategoryState.waiting_for_name.set()
@@ -50,6 +57,9 @@ async def add_category_finish(message: types.Message, state: FSMContext) -> None
     await message.answer(f"Категория <b>{name}</b> добавлена.", reply_markup=admin_menu())
 
 
+# =========================
+# ДОБАВЛЕНИЕ ТОВАРА
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "➕ Добавить товар")
 async def add_product_start(message: types.Message) -> None:
     await AddProductState.waiting_for_name.set()
@@ -136,6 +146,9 @@ async def add_product_photo_invalid(message: types.Message) -> None:
     await message.answer("Отправь фото товара или напиши /skip.")
 
 
+# =========================
+# БЫСТРОЕ ИЗМЕНЕНИЕ ЦЕНЫ
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "💲 Изменить цену")
 async def edit_price_start(message: types.Message) -> None:
     products = await db.get_all_products()
@@ -183,6 +196,9 @@ async def edit_price_finish(message: types.Message, state: FSMContext) -> None:
     await message.answer("Цена обновлена.", reply_markup=admin_menu())
 
 
+# =========================
+# ИЗМЕНЕНИЕ БАЛАНСА
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "💰 Изменить баланс")
 async def add_balance_start(message: types.Message) -> None:
     await AddBalanceState.waiting_for_user_id.set()
@@ -221,6 +237,260 @@ async def add_balance_finish(message: types.Message, state: FSMContext) -> None:
     await message.answer("Баланс успешно изменён.", reply_markup=admin_menu())
 
 
+# =========================
+# УДАЛЕНИЕ ТОВАРА
+# =========================
+@dp.message_handler(IsAdminSession(), lambda m: m.text == "🗑 Удалить товар")
+async def delete_product_start(message: types.Message) -> None:
+    products = await db.get_all_products()
+    if not products:
+        await message.answer("Товаров пока нет.")
+        return
+
+    text = "Список товаров:\n" + "\n".join(
+        f"{p['id']} — {p['name']} ({p['category_name']}) — {float(p['price']):.2f}"
+        for p in products
+    )
+
+    await DeleteProductState.waiting_for_product_id.set()
+    await message.answer(text + "\n\nВведи ID товара, который нужно удалить:")
+
+
+@dp.message_handler(IsAdminSession(), state=DeleteProductState.waiting_for_product_id)
+async def delete_product_finish(message: types.Message, state: FSMContext) -> None:
+    try:
+        product_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("ID товара должен быть числом.")
+        return
+
+    product = await db.get_product(product_id)
+    if not product:
+        await message.answer("Товар не найден.")
+        return
+
+    await db.delete_product(product_id)
+    await state.finish()
+    await message.answer("Товар удалён.", reply_markup=admin_menu())
+
+
+# =========================
+# УДАЛЕНИЕ КАТЕГОРИИ
+# =========================
+@dp.message_handler(IsAdminSession(), lambda m: m.text == "🗑 Удалить категорию")
+async def delete_category_start(message: types.Message) -> None:
+    categories = await db.get_categories()
+    if not categories:
+        await message.answer("Категорий пока нет.")
+        return
+
+    text = "Список категорий:\n" + "\n".join(
+        f"{c['id']} — {c['name']}" for c in categories
+    )
+
+    await DeleteCategoryState.waiting_for_category_id.set()
+    await message.answer(text + "\n\nВведи ID категории, которую нужно удалить:")
+
+
+@dp.message_handler(IsAdminSession(), state=DeleteCategoryState.waiting_for_category_id)
+async def delete_category_finish(message: types.Message, state: FSMContext) -> None:
+    try:
+        category_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("ID категории должен быть числом.")
+        return
+
+    category = await db.get_category(category_id)
+    if not category:
+        await message.answer("Категория не найдена.")
+        return
+
+    has_products = await db.category_has_products(category_id)
+    if has_products:
+        await message.answer("Нельзя удалить категорию, пока в ней есть товары.")
+        return
+
+    await db.delete_category(category_id)
+    await state.finish()
+    await message.answer("Категория удалена.", reply_markup=admin_menu())
+
+
+# =========================
+# РЕДАКТИРОВАНИЕ КАТЕГОРИИ
+# =========================
+@dp.message_handler(IsAdminSession(), lambda m: m.text == "✏️ Редактировать категорию")
+async def edit_category_start(message: types.Message) -> None:
+    categories = await db.get_categories()
+    if not categories:
+        await message.answer("Категорий пока нет.")
+        return
+
+    text = "Список категорий:\n" + "\n".join(
+        f"{c['id']} — {c['name']}" for c in categories
+    )
+
+    await EditCategoryState.waiting_for_category_id.set()
+    await message.answer(text + "\n\nВведи ID категории, которую нужно переименовать:")
+
+
+@dp.message_handler(IsAdminSession(), state=EditCategoryState.waiting_for_category_id)
+async def edit_category_get_id(message: types.Message, state: FSMContext) -> None:
+    try:
+        category_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("ID категории должен быть числом.")
+        return
+
+    category = await db.get_category(category_id)
+    if not category:
+        await message.answer("Категория не найдена.")
+        return
+
+    await state.update_data(category_id=category_id)
+    await EditCategoryState.waiting_for_new_name.set()
+    await message.answer("Введи новое название категории:")
+
+
+@dp.message_handler(IsAdminSession(), state=EditCategoryState.waiting_for_new_name)
+async def edit_category_finish(message: types.Message, state: FSMContext) -> None:
+    new_name = message.text.strip()
+    if len(new_name) < 2:
+        await message.answer("Название слишком короткое.")
+        return
+
+    data = await state.get_data()
+    await db.update_category_name(int(data["category_id"]), new_name)
+    await state.finish()
+    await message.answer("Категория обновлена.", reply_markup=admin_menu())
+
+
+# =========================
+# РЕДАКТИРОВАНИЕ ТОВАРА
+# =========================
+@dp.message_handler(IsAdminSession(), lambda m: m.text == "✏️ Редактировать товар")
+async def edit_product_start(message: types.Message) -> None:
+    products = await db.get_all_products()
+    if not products:
+        await message.answer("Товаров пока нет.")
+        return
+
+    text = "Список товаров:\n" + "\n".join(
+        f"{p['id']} — {p['name']} ({p['category_name']}) — {float(p['price']):.2f}"
+        for p in products
+    )
+
+    await EditProductState.waiting_for_product_id.set()
+    await message.answer(
+        text + "\n\nВведи ID товара, который хочешь изменить:"
+    )
+
+
+@dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_product_id)
+async def edit_product_get_id(message: types.Message, state: FSMContext) -> None:
+    try:
+        product_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("ID товара должен быть числом.")
+        return
+
+    product = await db.get_product(product_id)
+    if not product:
+        await message.answer("Товар не найден.")
+        return
+
+    await state.update_data(product_id=product_id)
+    await EditProductState.waiting_for_new_name.set()
+    await message.answer("Введи новое название товара:")
+
+
+@dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_new_name)
+async def edit_product_name(message: types.Message, state: FSMContext) -> None:
+    new_name = message.text.strip()
+    if len(new_name) < 2:
+        await message.answer("Название слишком короткое.")
+        return
+
+    await state.update_data(new_name=new_name)
+    await EditProductState.waiting_for_new_price.set()
+    await message.answer("Введи новую цену товара:")
+
+
+@dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_new_price)
+async def edit_product_price(message: types.Message, state: FSMContext) -> None:
+    try:
+        new_price = float(message.text.replace(",", "."))
+    except ValueError:
+        await message.answer("Цена должна быть числом.")
+        return
+
+    await state.update_data(new_price=new_price)
+    await EditProductState.waiting_for_new_category.set()
+
+    categories = await db.get_categories()
+    if not categories:
+        await message.answer("Категории не найдены.")
+        return
+
+    text = "Выбери новый ID категории:\n" + "\n".join(
+        f"{c['id']} — {c['name']}" for c in categories
+    )
+    await message.answer(text)
+
+
+@dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_new_category)
+async def edit_product_category(message: types.Message, state: FSMContext) -> None:
+    try:
+        category_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("ID категории должен быть числом.")
+        return
+
+    category = await db.get_category(category_id)
+    if not category:
+        await message.answer("Категория не найдена.")
+        return
+
+    await state.update_data(category_id=category_id)
+    await EditProductState.waiting_for_new_photo.set()
+    await message.answer("Отправь новое фото товара или напиши /skip, чтобы оставить старое.")
+
+
+@dp.message_handler(IsAdminSession(), commands=["skip"], state=EditProductState.waiting_for_new_photo)
+async def edit_product_skip_photo(message: types.Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    product_id = int(data["product_id"])
+
+    await db.update_product_name(product_id, data["new_name"])
+    await db.update_product_price(product_id, float(data["new_price"]))
+    await db.update_product_category(product_id, int(data["category_id"]))
+
+    await state.finish()
+    await message.answer("Товар обновлён.", reply_markup=admin_menu())
+
+
+@dp.message_handler(IsAdminSession(), content_types=types.ContentType.PHOTO, state=EditProductState.waiting_for_new_photo)
+async def edit_product_new_photo(message: types.Message, state: FSMContext) -> None:
+    photo_file_id = message.photo[-1].file_id
+    data = await state.get_data()
+    product_id = int(data["product_id"])
+
+    await db.update_product_name(product_id, data["new_name"])
+    await db.update_product_price(product_id, float(data["new_price"]))
+    await db.update_product_category(product_id, int(data["category_id"]))
+    await db.update_product_photo(product_id, photo_file_id)
+
+    await state.finish()
+    await message.answer("Товар полностью обновлён.", reply_markup=admin_menu())
+
+
+@dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_new_photo)
+async def edit_product_photo_invalid(message: types.Message) -> None:
+    await message.answer("Отправь фото товара или напиши /skip.")
+
+
+# =========================
+# ЗАКАЗЫ
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "📦 Заказы")
 async def all_orders(message: types.Message) -> None:
     orders = await db.get_all_orders()
@@ -240,6 +510,9 @@ async def all_orders(message: types.Message) -> None:
     await message.answer("\n\n".join(lines))
 
 
+# =========================
+# СТАТИСТИКА
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "📊 Статистика")
 async def admin_stats(message: types.Message) -> None:
     products = await db.get_all_products()
@@ -256,6 +529,9 @@ async def admin_stats(message: types.Message) -> None:
     await message.answer(text)
 
 
+# =========================
+# SOS ОБРАЩЕНИЯ
+# =========================
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "🆘 Обращения")
 async def all_tickets(message: types.Message) -> None:
     tickets = await db.get_open_tickets()

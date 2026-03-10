@@ -41,6 +41,16 @@ def admin_menu() -> ReplyKeyboardMarkup:
     )
 
     kb.row(
+        KeyboardButton("✏️ Редактировать товар"),
+        KeyboardButton("✏️ Редактировать категорию")
+    )
+
+    kb.row(
+        KeyboardButton("🗑 Удалить товар"),
+        KeyboardButton("🗑 Удалить категорию")
+    )
+
+    kb.row(
         KeyboardButton("💰 Изменить баланс")
     )
 

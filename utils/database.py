@@ -193,6 +193,23 @@ class Database:
     async def get_category(self, category_id: int):
         return await self.fetchrow("SELECT id, name FROM categories WHERE id = $1", category_id)
 
+    async def update_category_name(self, category_id: int, new_name: str) -> None:
+        await self.execute(
+            "UPDATE categories SET name = $2 WHERE id = $1",
+            category_id,
+            new_name,
+        )
+
+    async def category_has_products(self, category_id: int) -> bool:
+        count = await self.fetchval(
+            "SELECT COUNT(*) FROM products WHERE category_id = $1",
+            category_id,
+        )
+        return int(count or 0) > 0
+
+    async def delete_category(self, category_id: int) -> None:
+        await self.execute("DELETE FROM categories WHERE id = $1", category_id)
+
     async def add_product(
         self,
         category_id: int,
@@ -222,7 +239,7 @@ class Database:
     async def get_all_products(self):
         return await self.fetch(
             """
-            SELECT p.id, p.name, p.price, p.photo_file_id, c.name AS category_name
+            SELECT p.id, p.name, p.price, p.photo_file_id, p.category_id, c.name AS category_name
             FROM products p
             JOIN categories c ON c.id = p.category_id
             WHERE p.is_active = TRUE
@@ -240,8 +257,36 @@ class Database:
             product_id,
         )
 
+    async def update_product_name(self, product_id: int, new_name: str) -> None:
+        await self.execute(
+            "UPDATE products SET name = $2 WHERE id = $1",
+            product_id,
+            new_name,
+        )
+
     async def update_product_price(self, product_id: int, price: float) -> None:
-        await self.execute("UPDATE products SET price = $2 WHERE id = $1", product_id, price)
+        await self.execute(
+            "UPDATE products SET price = $2 WHERE id = $1",
+            product_id,
+            price,
+        )
+
+    async def update_product_photo(self, product_id: int, photo_file_id: str | None) -> None:
+        await self.execute(
+            "UPDATE products SET photo_file_id = $2 WHERE id = $1",
+            product_id,
+            photo_file_id,
+        )
+
+    async def update_product_category(self, product_id: int, category_id: int) -> None:
+        await self.execute(
+            "UPDATE products SET category_id = $2 WHERE id = $1",
+            product_id,
+            category_id,
+        )
+
+    async def delete_product(self, product_id: int) -> None:
+        await self.execute("DELETE FROM products WHERE id = $1", product_id)
 
     async def change_balance(self, user_id: int, amount: float) -> None:
         await self.execute(
