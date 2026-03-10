@@ -1,9 +1,9 @@
 from aiogram import types
 from aiogram.types import InputFile
-<<<<<<< HEAD
+
 import os
-=======
->>>>>>> 89904677af75836394a197c014783c6ca9e14d81
+
+
 
 from loader import db, dp
 
@@ -11,7 +11,7 @@ from loader import db, dp
 @dp.message_handler(commands=["profile"])
 @dp.message_handler(lambda m: m.text == "👤 Профиль")
 async def show_profile(message: types.Message) -> None:
-<<<<<<< HEAD
+
 
     # создаём пользователя если его нет
     user = await db.get_user(message.from_user.id)
@@ -46,7 +46,7 @@ async def show_profile(message: types.Message) -> None:
         await message.answer_photo(photo=photo, caption=text)
     else:
         await message.answer(text)
-=======
+
     user = await db.get_user(message.from_user.id)
     if not user:
         await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.full_name)
@@ -62,4 +62,3 @@ async def show_profile(message: types.Message) -> None:
 
     photo = InputFile("assets/profile_banner.png")
     await message.answer_photo(photo=photo, caption=text)
->>>>>>> 89904677af75836394a197c014783c6ca9e14d81

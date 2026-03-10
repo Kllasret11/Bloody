@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 MIN_QTY = 1
@@ -45,7 +45,7 @@ def product_item_kb(product_id: int, qty: int = 1) -> InlineKeyboardMarkup:
     return kb
 
 
-# ===== КОРЗИНА =====
+
 def cart_item_kb(product_id: int) -> InlineKeyboardMarkup:
 
     kb = InlineKeyboardMarkup(row_width=1)
@@ -73,7 +73,7 @@ def checkout_kb() -> InlineKeyboardMarkup:
     )
 
     return kb
-=======
+
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
@@ -307,4 +307,4 @@ async def checkout_address(message: types.Message, state: FSMContext):
         f"📞 {data['phone']}",
         reply_markup=main_menu()
     )
->>>>>>> 89904677af75836394a197c014783c6ca9e14d81
+
