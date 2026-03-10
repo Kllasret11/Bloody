@@ -342,3 +342,76 @@ async def remove_cart_item(self, item_id: int, user_id: int):
         item_id,
         user_id
     )
+
+async def create_order_from_cart(
+    self,
+    user_id: int,
+    phone: str,
+    address: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+):
+
+    cart_items = await self.fetch(
+        """
+        SELECT c.id, c.quantity, p.price
+        FROM cart_items c
+        JOIN products p ON p.id = c.product_id
+        WHERE c.user_id = $1
+        """,
+        user_id
+    )
+
+    if not cart_items:
+        raise ValueError("CART_EMPTY")
+
+    total = 0
+
+    for item in cart_items:
+        total += float(item["price"]) * int(item["quantity"])
+
+    balance = await self.fetchval(
+        "SELECT balance FROM users WHERE user_id=$1",
+        user_id
+    )
+
+    if balance < total:
+        raise RuntimeError("INSUFFICIENT_FUNDS")
+
+    await self.execute(
+        "UPDATE users SET balance = balance - $1 WHERE user_id=$2",
+        total,
+        user_id
+    )
+
+    order_id = await self.fetchval(
+        """
+        INSERT INTO orders(user_id, phone, address, latitude, longitude, total)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING id
+        """,
+        user_id,
+        phone,
+        address,
+        latitude,
+        longitude,
+        total
+    )
+
+    for item in cart_items:
+        await self.execute(
+            """
+            INSERT INTO order_items(order_id, product_id, quantity)
+            VALUES ($1,$2,$3)
+            """,
+            order_id,
+            item["id"],
+            item["quantity"]
+        )
+
+    await self.execute(
+        "DELETE FROM cart_items WHERE user_id=$1",
+        user_id
+    )
+
+    return order_id
