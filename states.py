@@ -27,6 +27,7 @@ class AddBalanceState(StatesGroup):
     waiting_for_amount = State()
 
 
+<<<<<<< HEAD
 class DeleteProductState(StatesGroup):
     waiting_for_product_id = State()
 
@@ -48,6 +49,8 @@ class EditProductState(StatesGroup):
     waiting_for_new_photo = State()
 
 
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 class CheckoutState(StatesGroup):
     waiting_for_phone = State()
     waiting_for_delivery_method = State()
@@ -61,4 +64,31 @@ class SosState(StatesGroup):
 
 class AdminReplySosState(StatesGroup):
     waiting_for_ticket_id = State()
+<<<<<<< HEAD
     waiting_for_reply = State()
+=======
+    waiting_for_reply = State()
+
+
+# ===== НОВЫЕ СОСТОЯНИЯ =====
+
+class DeleteProductState(StatesGroup):
+    waiting_for_product_id = State()
+
+
+class DeleteCategoryState(StatesGroup):
+    waiting_for_category_id = State()
+
+
+class EditProductState(StatesGroup):
+    waiting_for_product_id = State()
+    waiting_for_new_name = State()
+    waiting_for_new_price = State()
+    waiting_for_new_photo = State()
+    waiting_for_new_category = State()
+
+
+class EditCategoryState(StatesGroup):
+    waiting_for_category_id = State()
+    waiting_for_new_name = State()
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81

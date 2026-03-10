@@ -4,7 +4,10 @@ from keyboards.inline import categories_kb, product_item_kb
 from loader import db, dp
 
 
+<<<<<<< HEAD
 # ===== ОТКРЫТЬ КАТАЛОГ =====
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 @dp.message_handler(commands=["menu"])
 @dp.message_handler(lambda m: m.text == "🛍 Каталог")
 async def show_categories(message: types.Message):
@@ -15,15 +18,23 @@ async def show_categories(message: types.Message):
         await message.answer("Категории пока не добавлены.")
         return
 
+<<<<<<< HEAD
     text = "<b>🛍 Каталог магазина</b>\n\nВыбери категорию:"
 
     await message.answer(
         text,
+=======
+    await message.answer(
+        "Выбери категорию:",
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
         reply_markup=categories_kb(categories)
     )
 
 
+<<<<<<< HEAD
 # ===== ПОКАЗАТЬ ТОВАРЫ =====
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 @dp.callback_query_handler(lambda c: c.data.startswith("cat:"))
 async def show_products(call: types.CallbackQuery):
 
@@ -43,6 +54,7 @@ async def show_products(call: types.CallbackQuery):
 
         caption = (
             f"<b>{name}</b>\n"
+<<<<<<< HEAD
             f"💰 Цена: <b>{price:.2f}</b>\n\n"
             f"Выберите количество:"
         )
@@ -57,6 +69,18 @@ async def show_products(call: types.CallbackQuery):
 
         else:
 
+=======
+            f"💰 Цена: {price:.2f}"
+        )
+
+        if photo:
+            await call.message.answer_photo(
+                photo,
+                caption=caption,
+                reply_markup=product_item_kb(int(product["id"]), 1)
+            )
+        else:
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
             await call.message.answer(
                 caption,
                 reply_markup=product_item_kb(int(product["id"]), 1)
@@ -97,7 +121,11 @@ async def qty_minus(call: types.CallbackQuery):
     await call.answer()
 
 
+<<<<<<< HEAD
 # ===== ДОБАВИТЬ В КОРЗИНУ =====
+=======
+# ===== ДОБАВЛЕНИЕ В КОРЗИНУ =====
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 @dp.callback_query_handler(lambda c: c.data.startswith("addcart:"))
 async def add_to_cart(call: types.CallbackQuery):
 
@@ -114,4 +142,8 @@ async def add_to_cart(call: types.CallbackQuery):
 
     await db.add_to_cart(call.from_user.id, product_id, quantity)
 
+<<<<<<< HEAD
     await call.answer(f"🛒 Добавлено в корзину: {quantity} шт.")
+=======
+    await call.answer(f"Добавлено в корзину: {quantity} шт.")
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81

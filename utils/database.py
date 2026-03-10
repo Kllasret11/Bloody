@@ -149,9 +149,12 @@ class Database:
             """
         )
 
+<<<<<<< HEAD
     # =========================
     # USERS
     # =========================
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def upsert_user(self, user_id: int, username: str | None, full_name: str) -> None:
         await self.execute(
             """
@@ -168,6 +171,7 @@ class Database:
     async def get_user(self, user_id: int):
         return await self.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
 
+<<<<<<< HEAD
     async def change_balance(self, user_id: int, amount: float) -> None:
         await self.execute(
             "UPDATE users SET balance = balance + $2 WHERE user_id = $1",
@@ -196,6 +200,8 @@ class Database:
     # =========================
     # ADMIN SESSION
     # =========================
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def set_admin_session(self, user_id: int, is_logged_in: bool) -> None:
         await self.execute(
             """
@@ -209,6 +215,7 @@ class Database:
         )
 
     async def is_admin_logged_in(self, user_id: int) -> bool:
+<<<<<<< HEAD
         row = await self.fetchrow(
             "SELECT is_logged_in FROM admin_sessions WHERE user_id = $1",
             user_id,
@@ -218,6 +225,11 @@ class Database:
     # =========================
     # CATEGORIES
     # =========================
+=======
+        row = await self.fetchrow("SELECT is_logged_in FROM admin_sessions WHERE user_id = $1", user_id)
+        return bool(row and row["is_logged_in"])
+
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def add_category(self, name: str) -> None:
         await self.execute(
             "INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
@@ -228,10 +240,14 @@ class Database:
         return await self.fetch("SELECT id, name FROM categories ORDER BY id")
 
     async def get_category(self, category_id: int):
+<<<<<<< HEAD
         return await self.fetchrow(
             "SELECT id, name FROM categories WHERE id = $1",
             category_id,
         )
+=======
+        return await self.fetchrow("SELECT id, name FROM categories WHERE id = $1", category_id)
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 
     async def update_category_name(self, category_id: int, new_name: str) -> None:
         await self.execute(
@@ -250,9 +266,12 @@ class Database:
     async def delete_category(self, category_id: int) -> None:
         await self.execute("DELETE FROM categories WHERE id = $1", category_id)
 
+<<<<<<< HEAD
     # =========================
     # PRODUCTS
     # =========================
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def add_product(
         self,
         category_id: int,
@@ -261,10 +280,14 @@ class Database:
         photo_file_id: str | None = None,
     ) -> None:
         await self.execute(
+<<<<<<< HEAD
             """
             INSERT INTO products (category_id, name, price, photo_file_id)
             VALUES ($1, $2, $3, $4)
             """,
+=======
+            "INSERT INTO products (category_id, name, price, photo_file_id) VALUES ($1, $2, $3, $4)",
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
             category_id,
             name,
             price,
@@ -285,6 +308,7 @@ class Database:
     async def get_all_products(self):
         return await self.fetch(
             """
+<<<<<<< HEAD
             SELECT
                 p.id,
                 p.name,
@@ -292,6 +316,9 @@ class Database:
                 p.photo_file_id,
                 p.category_id,
                 c.name AS category_name
+=======
+            SELECT p.id, p.name, p.price, p.photo_file_id, p.category_id, c.name AS category_name
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
             FROM products p
             JOIN categories c ON c.id = p.category_id
             WHERE p.is_active = TRUE
@@ -340,6 +367,7 @@ class Database:
     async def delete_product(self, product_id: int) -> None:
         await self.execute("DELETE FROM products WHERE id = $1", product_id)
 
+<<<<<<< HEAD
     async def get_total_products_count(self) -> int:
         value = await self.fetchval("SELECT COUNT(*) FROM products WHERE is_active = TRUE")
         return int(value or 0)
@@ -374,6 +402,15 @@ class Database:
     # =========================
     # CART
     # =========================
+=======
+    async def change_balance(self, user_id: int, amount: float) -> None:
+        await self.execute(
+            "UPDATE users SET balance = balance + $2 WHERE user_id = $1",
+            user_id,
+            amount,
+        )
+
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def add_to_cart(self, user_id: int, product_id: int, quantity: int = 1) -> None:
         quantity = max(1, int(quantity))
         await self.execute(
@@ -417,9 +454,12 @@ class Database:
     async def clear_cart(self, user_id: int) -> None:
         await self.execute("DELETE FROM cart_items WHERE user_id = $1", user_id)
 
+<<<<<<< HEAD
     # =========================
     # ORDERS
     # =========================
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def create_order_from_cart(
         self,
         user_id: int,
@@ -502,6 +542,7 @@ class Database:
             """
         )
 
+<<<<<<< HEAD
     async def get_total_orders_count(self) -> int:
         value = await self.fetchval("SELECT COUNT(*) FROM orders")
         return int(value or 0)
@@ -521,6 +562,8 @@ class Database:
     # =========================
     # SUPPORT
     # =========================
+=======
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
     async def create_support_ticket(
         self,
         user_id: int,
@@ -553,10 +596,14 @@ class Database:
         )
 
     async def get_ticket(self, ticket_id: int):
+<<<<<<< HEAD
         return await self.fetchrow(
             "SELECT * FROM support_tickets WHERE id = $1",
             ticket_id,
         )
+=======
+        return await self.fetchrow("SELECT * FROM support_tickets WHERE id = $1", ticket_id)
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 
     async def answer_ticket(self, ticket_id: int, reply_text: str) -> None:
         await self.execute(

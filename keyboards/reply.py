@@ -25,7 +25,14 @@ def main_menu() -> ReplyKeyboardMarkup:
 
 
 def admin_menu() -> ReplyKeyboardMarkup:
+<<<<<<< HEAD
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
+=======
+    kb = ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        one_time_keyboard=False
+    )
+>>>>>>> 89904677af75836394a197c014783c6ca9e14d81
 
     kb.row(
         KeyboardButton("📊 Статистика"),
