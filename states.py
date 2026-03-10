@@ -28,8 +28,8 @@ class AddBalanceState(StatesGroup):
 
 
 class CheckoutState(StatesGroup):
-    waiting_for_address = State()
     waiting_for_phone = State()
+    waiting_for_location = State()
 
 
 class SosState(StatesGroup):

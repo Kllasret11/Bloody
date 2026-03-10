@@ -17,3 +17,15 @@ def admin_menu() -> ReplyKeyboardMarkup:
     kb.add(KeyboardButton("🆘 Обращения"), KeyboardButton("✉️ Ответить на SOS"))
     kb.add(KeyboardButton("🚪 Выйти из админки"))
     return kb
+
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+
+def phone_keyboard():
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(KeyboardButton("📱 Отправить номер", request_contact=True))
+    return kb
+
+def location_keyboard():
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(KeyboardButton("📍 Отправить геопозицию", request_location=True))
+    return kb

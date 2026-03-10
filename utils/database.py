@@ -101,6 +101,8 @@ class Database:
                 total_amount NUMERIC(12,2) NOT NULL,
                 phone TEXT,
                 address TEXT,
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
                 status TEXT NOT NULL DEFAULT 'paid',
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
@@ -219,16 +221,17 @@ class Database:
             amount,
         )
 
-    async def add_to_cart(self, user_id: int, product_id: int) -> None:
+    async def add_to_cart(self, user_id, product_id, quantity):
         await self.execute(
             """
             INSERT INTO cart_items (user_id, product_id, quantity)
-            VALUES ($1, $2, 1)
-            ON CONFLICT (user_id, product_id)
-            DO UPDATE SET quantity = cart_items.quantity + 1
+            VALUES ($1, $2, $3) ON CONFLICT (user_id, product_id)
+            DO
+            UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
             """,
             user_id,
             product_id,
+            quantity
         )
 
     async def get_cart(self, user_id: int):

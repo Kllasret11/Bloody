@@ -71,3 +71,27 @@ async def checkout_phone(message: types.Message, state: FSMContext) -> None:
 
     await state.finish()
     await message.answer(f"Заказ №{order_id} успешно оформлен и оплачен.")
+
+@dp.message_handler(content_types=['contact'], state=CheckoutState.waiting_for_phone)
+async def get_phone(message: types.Message, state: FSMContext):
+    phone = message.contact.phone_number
+    await state.update_data(phone=phone)
+    await message.answer("Теперь отправьте геопозицию доставки 📍")
+
+@dp.message_handler(content_types=['location'], state=CheckoutState.waiting_for_location)
+async def get_location(message: types.Message, state: FSMContext):
+    latitude = message.location.latitude
+    longitude = message.location.longitude
+
+    data = await state.get_data()
+    phone = data.get("phone")
+
+    await db.create_order(
+        user_id=message.from_user.id,
+        phone=phone,
+        latitude=latitude,
+        longitude=longitude
+    )
+
+    await message.answer("✅ Заказ оформлен!")
+    await state.finish()

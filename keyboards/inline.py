@@ -19,3 +19,17 @@ def cart_kb() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton("✅ Оформить заказ", callback_data="checkout"))
     kb.add(InlineKeyboardButton("🗑 Очистить корзину", callback_data="clearcart"))
     return kb
+
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+def quantity_kb(product_id: int, qty: int = 1):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="➖", callback_data=f"qty_minus:{product_id}:{qty}"),
+            InlineKeyboardButton(text=str(qty), callback_data="qty_now"),
+            InlineKeyboardButton(text="➕", callback_data=f"qty_plus:{product_id}:{qty}")
+        ],
+        [
+            InlineKeyboardButton(text="🛒 Добавить в корзину", callback_data=f"add_cart:{product_id}:{qty}")
+        ]
+    ])

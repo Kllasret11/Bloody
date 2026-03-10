@@ -40,3 +40,15 @@ async def add_to_cart(call: types.CallbackQuery) -> None:
     product_id = int(call.data.split(":", 1)[1])
     await db.add_to_cart(call.from_user.id, product_id)
     await call.answer("Товар добавлен в корзину")
+
+@dp.callback_query_handler(lambda c: c.data.startswith("qty_plus"))
+async def qty_plus(call: types.CallbackQuery):
+    _, product_id, qty = call.data.split(":")
+    qty = int(qty) + 1
+    await call.message.edit_reply_markup(reply_markup=quantity_kb(int(product_id), qty))
+
+@dp.callback_query_handler(lambda c: c.data.startswith("qty_minus"))
+async def qty_minus(call: types.CallbackQuery):
+    _, product_id, qty = call.data.split(":")
+    qty = max(1, int(qty) - 1)
+    await call.message.edit_reply_markup(reply_markup=quantity_kb(int(product_id), qty))
