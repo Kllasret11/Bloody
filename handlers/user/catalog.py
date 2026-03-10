@@ -4,14 +4,11 @@ from keyboards.inline import categories_kb, product_item_kb
 from loader import db, dp
 
 
-
 # ===== ОТКРЫТЬ КАТАЛОГ =====
-
 
 @dp.message_handler(commands=["menu"])
 @dp.message_handler(lambda m: m.text == "🛍 Каталог")
 async def show_categories(message: types.Message):
-
     categories = await db.get_categories()
 
     if not categories:
@@ -22,20 +19,14 @@ async def show_categories(message: types.Message):
 
     await message.answer(
         text,
-
-    await message.answer(
-        "Выбери категорию:",
         reply_markup=categories_kb(categories)
     )
 
 
-
 # ===== ПОКАЗАТЬ ТОВАРЫ =====
-
 
 @dp.callback_query_handler(lambda c: c.data.startswith("cat:"))
 async def show_products(call: types.CallbackQuery):
-
     category_id = int(call.data.split(":")[1])
 
     products = await db.get_products_by_category(category_id)
@@ -45,7 +36,6 @@ async def show_products(call: types.CallbackQuery):
         return
 
     for product in products:
-
         name = product.get("name", "Товар")
         price = float(product.get("price", 0))
         photo = product.get("photo_file_id")
@@ -57,26 +47,12 @@ async def show_products(call: types.CallbackQuery):
         )
 
         if photo:
-
             await call.message.answer_photo(
                 photo=photo,
                 caption=caption,
                 reply_markup=product_item_kb(int(product["id"]), 1)
             )
-
         else:
-
-            f"💰 Цена: {price:.2f}"
-        )
-
-        if photo:
-            await call.message.answer_photo(
-                photo,
-                caption=caption,
-                reply_markup=product_item_kb(int(product["id"]), 1)
-            )
-        else:
-
             await call.message.answer(
                 caption,
                 reply_markup=product_item_kb(int(product["id"]), 1)
@@ -86,9 +62,9 @@ async def show_products(call: types.CallbackQuery):
 
 
 # ===== УВЕЛИЧЕНИЕ КОЛИЧЕСТВА =====
-@dp.callback_query_handler(lambda c: c.data.startswith("qty_plus"))
-async def qty_plus(call: types.CallbackQuery):
 
+@dp.callback_query_handler(lambda c: c.data.startswith("qty_plus:"))
+async def qty_plus(call: types.CallbackQuery):
     _, product_id, qty = call.data.split(":")
 
     product_id = int(product_id)
@@ -102,9 +78,9 @@ async def qty_plus(call: types.CallbackQuery):
 
 
 # ===== УМЕНЬШЕНИЕ КОЛИЧЕСТВА =====
-@dp.callback_query_handler(lambda c: c.data.startswith("qty_minus"))
-async def qty_minus(call: types.CallbackQuery):
 
+@dp.callback_query_handler(lambda c: c.data.startswith("qty_minus:"))
+async def qty_minus(call: types.CallbackQuery):
     _, product_id, qty = call.data.split(":")
 
     product_id = int(product_id)
@@ -117,14 +93,10 @@ async def qty_minus(call: types.CallbackQuery):
     await call.answer()
 
 
-
-# ===== ДОБАВИТЬ В КОРЗИНУ =====
-
 # ===== ДОБАВЛЕНИЕ В КОРЗИНУ =====
 
 @dp.callback_query_handler(lambda c: c.data.startswith("addcart:"))
 async def add_to_cart(call: types.CallbackQuery):
-
     data = call.data.split(":")
 
     if len(data) == 3:
@@ -138,8 +110,4 @@ async def add_to_cart(call: types.CallbackQuery):
 
     await db.add_to_cart(call.from_user.id, product_id, quantity)
 
-
     await call.answer(f"🛒 Добавлено в корзину: {quantity} шт.")
-
-    await call.answer(f"Добавлено в корзину: {quantity} шт.")
-
