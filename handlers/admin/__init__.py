@@ -1,5 +1,5 @@
 
-from .admin import *
+from .panel import *
 from .user import *
 
 from .auth import dp
