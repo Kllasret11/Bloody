@@ -332,3 +332,13 @@ class Database:
             ticket_id,
             reply_text,
         )
+
+async def remove_cart_item(self, item_id: int, user_id: int):
+    await self.execute(
+        """
+        DELETE FROM cart_items
+        WHERE id = $1 AND user_id = $2
+        """,
+        item_id,
+        user_id
+    )
