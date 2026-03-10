@@ -19,6 +19,9 @@ from states import (
 
 dp.filters_factory.bind(IsAdminSession)
 
+# Замени ID ниже на свой Telegram ID, если нужно
+ADMINS = {1160081337}
+
 
 def _order_delivery(order) -> str:
     if order["address"]:
@@ -33,12 +36,22 @@ def _order_delivery(order) -> str:
     return "-"
 
 
+@dp.message_handler(commands=["admin"], state="*")
+async def admin_login(message: types.Message, state: FSMContext) -> None:
+    if message.from_user.id not in ADMINS:
+        await message.answer("У тебя нет доступа к админ-панели.")
+        return
+
+    await state.finish()
+    await db.set_admin_session(message.from_user.id, True)
+    await message.answer("Ты вошел в админку.", reply_markup=admin_menu())
+
+
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "🚪 Выйти из админки", state="*")
 async def admin_logout(message: types.Message, state: FSMContext) -> None:
     await db.set_admin_session(message.from_user.id, False)
     await state.finish()
     await message.answer("Ты вышел из админки.", reply_markup=main_menu())
-
 
 
 # ДОБАВЛЕНИЕ КАТЕГОРИИ
@@ -145,7 +158,6 @@ async def add_product_photo_invalid(message: types.Message) -> None:
     await message.answer("Отправь фото товара или напиши /skip.")
 
 
-
 # БЫСТРОЕ ИЗМЕНЕНИЕ ЦЕНЫ
 
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "💲 Изменить цену")
@@ -195,7 +207,6 @@ async def edit_price_finish(message: types.Message, state: FSMContext) -> None:
     await message.answer("Цена обновлена.", reply_markup=admin_menu())
 
 
-
 # ИЗМЕНЕНИЕ БАЛАНСА
 
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "💰 Изменить баланс")
@@ -236,7 +247,6 @@ async def add_balance_finish(message: types.Message, state: FSMContext) -> None:
     await message.answer("Баланс успешно изменён.", reply_markup=admin_menu())
 
 
-
 # УДАЛЕНИЕ ТОВАРА
 
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "🗑 Удалить товар")
@@ -271,7 +281,6 @@ async def delete_product_finish(message: types.Message, state: FSMContext) -> No
     await db.delete_product(product_id)
     await state.finish()
     await message.answer("Товар удалён.", reply_markup=admin_menu())
-
 
 
 # УДАЛЕНИЕ КАТЕГОРИИ
@@ -312,7 +321,6 @@ async def delete_category_finish(message: types.Message, state: FSMContext) -> N
     await db.delete_category(category_id)
     await state.finish()
     await message.answer("Категория удалена.", reply_markup=admin_menu())
-
 
 
 # РЕДАКТИРОВАНИЕ КАТЕГОРИИ
@@ -363,7 +371,6 @@ async def edit_category_finish(message: types.Message, state: FSMContext) -> Non
     await message.answer("Категория обновлена.", reply_markup=admin_menu())
 
 
-
 # РЕДАКТИРОВАНИЕ ТОВАРА
 
 @dp.message_handler(IsAdminSession(), lambda m: m.text == "✏️ Редактировать товар")
@@ -379,9 +386,7 @@ async def edit_product_start(message: types.Message) -> None:
     )
 
     await EditProductState.waiting_for_product_id.set()
-    await message.answer(
-        text + "\n\nВведи ID товара, который хочешь изменить:"
-    )
+    await message.answer(text + "\n\nВведи ID товара, который хочешь изменить:")
 
 
 @dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_product_id)
@@ -485,7 +490,6 @@ async def edit_product_new_photo(message: types.Message, state: FSMContext) -> N
 @dp.message_handler(IsAdminSession(), state=EditProductState.waiting_for_new_photo)
 async def edit_product_photo_invalid(message: types.Message) -> None:
     await message.answer("Отправь фото товара или напиши /skip.")
-
 
 
 # ЗАКАЗЫ
