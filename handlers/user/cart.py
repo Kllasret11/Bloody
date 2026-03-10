@@ -49,10 +49,15 @@ async def show_cart(message: types.Message):
             f"🧾 Сумма: {item_total:.2f}"
         )
 
-        await message.answer(
-            text,
-            reply_markup=cart_item_kb(int(item.get("id")))
-        )
+        product_id = item.get("product_id")
+
+        if product_id:
+            await message.answer(
+                text,
+                reply_markup=cart_item_kb(int(product_id))
+            )
+        else:
+            await message.answer(text)
 
     await message.answer(
         f"<b>Итого:</b> {total:.2f}",
