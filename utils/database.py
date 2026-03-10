@@ -221,7 +221,8 @@ class Database:
             amount,
         )
 
-    async def add_to_cart(self, user_id, product_id, quantity):
+    async def add_to_cart(self, user_id: int, product_id: int, quantity: int = 1) -> None:
+        quantity = max(1, int(quantity))
         await self.execute(
             """
             INSERT INTO cart_items (user_id, product_id, quantity)
@@ -231,7 +232,7 @@ class Database:
             """,
             user_id,
             product_id,
-            quantity
+            quantity,
         )
 
     async def get_cart(self, user_id: int):
