@@ -285,5 +285,3 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
         except Exception:
             continue
 
-    )
-
