@@ -180,8 +180,6 @@ class Database:
             await conn.execute(constraint_sql)
 
     async def _migrate(self) -> None:
-        current = await self._get_schema_version()
-
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 current = int(
@@ -192,26 +190,45 @@ class Database:
 
                 if current < 1:
                     await conn.execute(
-                        "ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 0"
+                        """
+                        ALTER TABLE products
+                        ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 0
+                        """
                     )
 
                     await self._ensure_constraint(
                         conn,
                         "products_stock_non_negative",
-                        "ALTER TABLE products ADD CONSTRAINT products_stock_non_negative CHECK (stock >= 0)",
+                        """
+                        ALTER TABLE products
+                        ADD CONSTRAINT products_stock_non_negative
+                        CHECK (stock >= 0)
+                        """,
                     )
 
                     await conn.execute(
-                        "ALTER TABLE orders ADD COLUMN IF NOT EXISTS applied_promo_code TEXT"
+                        """
+                        ALTER TABLE orders
+                        ADD COLUMN IF NOT EXISTS applied_promo_code TEXT
+                        """
                     )
                     await conn.execute(
-                        "ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_percent INTEGER"
+                        """
+                        ALTER TABLE orders
+                        ADD COLUMN IF NOT EXISTS promo_percent INTEGER
+                        """
                     )
                     await conn.execute(
-                        "ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0"
+                        """
+                        ALTER TABLE orders
+                        ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0
+                        """
                     )
                     await conn.execute(
-                        "ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'new'"
+                        """
+                        ALTER TABLE orders
+                        ALTER COLUMN status SET DEFAULT 'new'
+                        """
                     )
 
                     await conn.execute(
@@ -232,13 +249,21 @@ class Database:
                     await self._ensure_constraint(
                         conn,
                         "promo_codes_percent_range",
-                        "ALTER TABLE promo_codes ADD CONSTRAINT promo_codes_percent_range CHECK (percent BETWEEN 1 AND 100)",
+                        """
+                        ALTER TABLE promo_codes
+                        ADD CONSTRAINT promo_codes_percent_range
+                        CHECK (percent BETWEEN 1 AND 100)
+                        """,
                     )
 
                     await self._ensure_constraint(
                         conn,
                         "promo_codes_used_count_non_negative",
-                        "ALTER TABLE promo_codes ADD CONSTRAINT promo_codes_used_count_non_negative CHECK (used_count >= 0)",
+                        """
+                        ALTER TABLE promo_codes
+                        ADD CONSTRAINT promo_codes_used_count_non_negative
+                        CHECK (used_count >= 0)
+                        """,
                     )
 
                     await conn.execute(
@@ -266,7 +291,11 @@ class Database:
                     )
 
                     await conn.execute(
-                        "INSERT INTO schema_migrations (version) VALUES (1) ON CONFLICT DO NOTHING"
+                        """
+                        INSERT INTO schema_migrations (version)
+                        VALUES (1)
+                        ON CONFLICT DO NOTHING
+                        """
                     )
 
     async def upsert_user(self, user_id: int, username: str | None, full_name: str) -> None:
@@ -306,7 +335,11 @@ class Database:
 
     async def change_balance(self, user_id: int, amount: float) -> None:
         await self.execute(
-            "UPDATE users SET balance = balance + $2 WHERE user_id = $1",
+            """
+            UPDATE users
+            SET balance = balance + $2
+            WHERE user_id = $1
+            """,
             user_id,
             amount,
         )
@@ -339,7 +372,10 @@ class Database:
         payload: dict[str, Any] | None = None,
     ) -> None:
         await self.execute(
-            "INSERT INTO admin_audit_log (admin_id, action, payload) VALUES ($1, $2, $3)",
+            """
+            INSERT INTO admin_audit_log (admin_id, action, payload)
+            VALUES ($1, $2, $3)
+            """,
             admin_id,
             action,
             json.dumps(payload) if payload is not None else None,
@@ -356,7 +392,9 @@ class Database:
         )
 
     async def get_categories(self):
-        return await self.fetch("SELECT id, name FROM categories ORDER BY id")
+        return await self.fetch(
+            "SELECT id, name FROM categories ORDER BY id"
+        )
 
     async def get_category(self, category_id: int):
         return await self.fetchrow(
@@ -366,7 +404,11 @@ class Database:
 
     async def update_category_name(self, category_id: int, new_name: str) -> None:
         await self.execute(
-            "UPDATE categories SET name = $2 WHERE id = $1",
+            """
+            UPDATE categories
+            SET name = $2
+            WHERE id = $1
+            """,
             category_id,
             new_name,
         )
@@ -395,7 +437,13 @@ class Database:
         stock = max(0, int(stock))
         await self.execute(
             """
-            INSERT INTO products (category_id, name, price, photo_file_id, stock)
+            INSERT INTO products (
+                category_id,
+                name,
+                price,
+                photo_file_id,
+                stock
+            )
             VALUES ($1, $2, $3, $4, $5)
             """,
             category_id,
@@ -468,7 +516,11 @@ class Database:
     async def set_product_stock(self, product_id: int, stock: int) -> None:
         stock = max(0, int(stock))
         await self.execute(
-            "UPDATE products SET stock = $2 WHERE id = $1",
+            """
+            UPDATE products
+            SET stock = $2
+            WHERE id = $1
+            """,
             product_id,
             stock,
         )
@@ -493,28 +545,44 @@ class Database:
 
     async def update_product_name(self, product_id: int, new_name: str) -> None:
         await self.execute(
-            "UPDATE products SET name = $2 WHERE id = $1",
+            """
+            UPDATE products
+            SET name = $2
+            WHERE id = $1
+            """,
             product_id,
             new_name,
         )
 
     async def update_product_price(self, product_id: int, price: float) -> None:
         await self.execute(
-            "UPDATE products SET price = $2 WHERE id = $1",
+            """
+            UPDATE products
+            SET price = $2
+            WHERE id = $1
+            """,
             product_id,
             price,
         )
 
     async def update_product_photo(self, product_id: int, photo_file_id: str | None) -> None:
         await self.execute(
-            "UPDATE products SET photo_file_id = $2 WHERE id = $1",
+            """
+            UPDATE products
+            SET photo_file_id = $2
+            WHERE id = $1
+            """,
             product_id,
             photo_file_id,
         )
 
     async def update_product_category(self, product_id: int, category_id: int) -> None:
         await self.execute(
-            "UPDATE products SET category_id = $2 WHERE id = $1",
+            """
+            UPDATE products
+            SET category_id = $2
+            WHERE id = $1
+            """,
             product_id,
             category_id,
         )
@@ -559,7 +627,10 @@ class Database:
 
     async def remove_cart_item(self, product_id: int, user_id: int) -> None:
         await self.execute(
-            "DELETE FROM cart_items WHERE product_id = $1 AND user_id = $2",
+            """
+            DELETE FROM cart_items
+            WHERE product_id = $1 AND user_id = $2
+            """,
             product_id,
             user_id,
         )
@@ -574,11 +645,13 @@ class Database:
         code = (code or "").strip().upper()
         if not code:
             return None
+
         return await self.fetchrow(
             """
             SELECT *
             FROM promo_codes
-            WHERE code = $1 AND is_active = TRUE
+            WHERE code = $1
+              AND is_active = TRUE
               AND (expires_at IS NULL OR expires_at > NOW())
               AND (max_uses IS NULL OR used_count < max_uses)
             """,
@@ -588,7 +661,11 @@ class Database:
     async def increment_promo_use(self, code: str, conn: asyncpg.Connection) -> None:
         code = (code or "").strip().upper()
         await conn.execute(
-            "UPDATE promo_codes SET used_count = used_count + 1 WHERE code = $1",
+            """
+            UPDATE promo_codes
+            SET used_count = used_count + 1
+            WHERE code = $1
+            """,
             code,
         )
 
@@ -713,7 +790,13 @@ class Database:
                 for item in cart_items:
                     await conn.execute(
                         """
-                        INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+                        INSERT INTO order_items (
+                            order_id,
+                            product_id,
+                            product_name,
+                            price,
+                            quantity
+                        )
                         VALUES ($1, $2, $3, $4, $5)
                         """,
                         order_id,
@@ -751,7 +834,11 @@ class Database:
 
     async def update_order_status(self, order_id: int, status: str) -> None:
         await self.execute(
-            "UPDATE orders SET status = $1 WHERE id = $2",
+            """
+            UPDATE orders
+            SET status = $1
+            WHERE id = $2
+            """,
             status,
             order_id,
         )
@@ -763,7 +850,11 @@ class Database:
         changed_by: int | None = None,
     ) -> None:
         await self.execute(
-            "UPDATE orders SET status = $2 WHERE id = $1",
+            """
+            UPDATE orders
+            SET status = $2
+            WHERE id = $1
+            """,
             order_id,
             status,
         )
