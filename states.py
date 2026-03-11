@@ -45,7 +45,10 @@ class EditProductState(StatesGroup):
     waiting_for_product_id = State()
     waiting_for_new_name = State()
     waiting_for_new_price = State()
+<<<<<<< HEAD
     waiting_for_new_stock = State()
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     waiting_for_new_category = State()
     waiting_for_new_photo = State()
 
@@ -64,8 +67,12 @@ class SosState(StatesGroup):
 
 class AdminReplySosState(StatesGroup):
     waiting_for_ticket_id = State()
+<<<<<<< HEAD
     waiting_for_reply = State()
 
 
 class FindUserState(StatesGroup):
     waiting_for_user_id = State()
+=======
+    waiting_for_reply = State()
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4

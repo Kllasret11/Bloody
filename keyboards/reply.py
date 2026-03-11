@@ -12,7 +12,10 @@ def main_menu() -> ReplyKeyboardMarkup:
 def admin_menu() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
     kb.row(KeyboardButton("📊 Статистика"), KeyboardButton("📦 Заказы"))
+<<<<<<< HEAD
     kb.row(KeyboardButton("👥 Пользователи"), KeyboardButton("🔎 Найти пользователя"))
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     kb.row(KeyboardButton("➕ Добавить товар"), KeyboardButton("➕ Добавить категорию"))
     kb.row(KeyboardButton("✏️ Редактировать товар"), KeyboardButton("✏️ Редактировать категорию"))
     kb.row(KeyboardButton("🗑 Удалить товар"), KeyboardButton("🗑 Удалить категорию"))

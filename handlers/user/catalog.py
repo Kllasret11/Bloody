@@ -66,9 +66,12 @@ async def show_products(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("qty_plus:"))
 async def qty_plus(call: types.CallbackQuery):
+<<<<<<< HEAD
     if not hit(call.from_user.id, "qty_plus", 0.2):
         await call.answer("Слишком часто.", show_alert=False)
         return
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     _, product_id, qty = call.data.split(":")
 
     product_id = int(product_id)
@@ -85,9 +88,12 @@ async def qty_plus(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("qty_minus:"))
 async def qty_minus(call: types.CallbackQuery):
+<<<<<<< HEAD
     if not hit(call.from_user.id, "qty_minus", 0.2):
         await call.answer("Слишком часто.", show_alert=False)
         return
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     _, product_id, qty = call.data.split(":")
 
     product_id = int(product_id)
@@ -104,9 +110,12 @@ async def qty_minus(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("addcart:"))
 async def add_to_cart(call: types.CallbackQuery):
+<<<<<<< HEAD
     if not hit(call.from_user.id, "addcart", 0.5):
         await call.answer("Слишком часто.", show_alert=False)
         return
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     data = call.data.split(":")
 
     if len(data) == 3:

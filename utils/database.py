@@ -381,8 +381,13 @@ class Database:
         stock = max(0, int(stock))
         await self.execute(
             """
+<<<<<<< HEAD
             INSERT INTO products (category_id, name, price, photo_file_id, stock)
             VALUES ($1, $2, $3, $4, $5)
+=======
+            INSERT INTO products (category_id, name, price, photo_file_id)
+            VALUES ($1, $2, $3, $4)
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
             """,
             category_id,
             name,
@@ -421,7 +426,10 @@ class Database:
                 p.name,
                 p.price,
                 p.photo_file_id,
+<<<<<<< HEAD
                 p.stock,
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
                 p.category_id,
                 c.name AS category_name
             FROM products p
@@ -633,10 +641,19 @@ class Database:
         if not cart_items:
             raise ValueError("Cart is empty")
 
+<<<<<<< HEAD
         # Validate items are still active and available
         for item in cart_items:
             if not item["is_active"] or int(item["stock"]) <= 0:
                 raise RuntimeError("OUT_OF_STOCK")
+=======
+        total_amount = sum(float(item["price"]) * int(item["quantity"]) for item in cart_items)
+        user = await self.get_user(user_id)
+        if user is None:
+            raise ValueError("User not found")
+        if float(user["balance"]) < total_amount:
+            raise RuntimeError("INSUFFICIENT_FUNDS")
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
 
         async with self.pool.acquire() as conn:
             async with conn.transaction():
@@ -743,13 +760,17 @@ class Database:
                         item["quantity"],
                     )
 
+<<<<<<< HEAD
                 if applied_promo_code:
                     await self.increment_promo_use(applied_promo_code, conn)
 
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
                 await conn.execute(
                     "DELETE FROM cart_items WHERE user_id = $1",
                     user_id,
                 )
+<<<<<<< HEAD
 
                 await conn.execute(
                     "INSERT INTO order_status_history (order_id, status, changed_by) VALUES ($1, $2, $3)",
@@ -757,6 +778,8 @@ class Database:
                     "processing",
                     None,
                 )
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
 
         return int(order_id)
 

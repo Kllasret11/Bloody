@@ -50,9 +50,12 @@ async def show_cart(message: types.Message) -> None:
 
 @dp.callback_query_handler(lambda c: c.data.startswith("cartdel:"))
 async def remove_cart_item(call: types.CallbackQuery) -> None:
+<<<<<<< HEAD
     if not hit(call.from_user.id, "cartdel", 0.5):
         await call.answer("Слишком часто.", show_alert=False)
         return
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     product_id = int(call.data.split(":")[1])
     await db.remove_cart_item(product_id, call.from_user.id)
     await call.answer("Товар удалён из корзины")
@@ -64,9 +67,12 @@ async def remove_cart_item(call: types.CallbackQuery) -> None:
 
 @dp.callback_query_handler(lambda c: c.data == "checkout")
 async def start_checkout(call: types.CallbackQuery, state: FSMContext) -> None:
+<<<<<<< HEAD
     if not hit(call.from_user.id, "checkout", 1.0):
         await call.answer("Слишком часто.", show_alert=False)
         return
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
     cart_items = await db.get_cart(call.from_user.id)
     if not cart_items:
         await call.answer("Корзина пуста.", show_alert=True)
@@ -86,6 +92,7 @@ async def start_checkout(call: types.CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+<<<<<<< HEAD
 @dp.callback_query_handler(lambda c: c.data == "promo")
 async def start_promo(call: types.CallbackQuery, state: FSMContext) -> None:
     if not hit(call.from_user.id, "promo", 1.0):
@@ -114,6 +121,8 @@ async def promo_input(message: types.Message, state: FSMContext) -> None:
     await message.answer(f"Промокод <b>{promo['code']}</b> применён: скидка {int(promo['percent'])}%.")
 
 
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
 @dp.message_handler(content_types=types.ContentType.CONTACT, state=CheckoutState.waiting_for_phone)
 async def checkout_phone_contact(message: types.Message, state: FSMContext) -> None:
     contact = message.contact
@@ -162,7 +171,10 @@ async def checkout_location(message: types.Message, state: FSMContext) -> None:
             phone=data["phone"],
             latitude=location.latitude,
             longitude=location.longitude,
+<<<<<<< HEAD
             promo_code=promo_code,
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
         )
     except ValueError:
         await state.finish()
@@ -172,6 +184,7 @@ async def checkout_location(message: types.Message, state: FSMContext) -> None:
         if str(exc) == "INSUFFICIENT_FUNDS":
             await message.answer("Недостаточно средств на балансе.", reply_markup=main_menu())
             await state.finish()
+<<<<<<< HEAD
             return
         if str(exc) == "OUT_OF_STOCK":
             await message.answer(
@@ -179,6 +192,8 @@ async def checkout_location(message: types.Message, state: FSMContext) -> None:
                 reply_markup=main_menu(),
             )
             await state.finish()
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
             return
         raise
 
@@ -224,7 +239,10 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
             user_id=message.from_user.id,
             phone=data["phone"],
             address=address,
+<<<<<<< HEAD
             promo_code=promo_code,
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
         )
     except ValueError:
         await state.finish()
@@ -234,6 +252,7 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
         if str(exc) == "INSUFFICIENT_FUNDS":
             await message.answer("Недостаточно средств на балансе.", reply_markup=main_menu())
             await state.finish()
+<<<<<<< HEAD
             return
         if str(exc) == "OUT_OF_STOCK":
             await message.answer(
@@ -241,6 +260,8 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
                 reply_markup=main_menu(),
             )
             await state.finish()
+=======
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
             return
         raise
 
@@ -248,6 +269,7 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
     await message.answer(
         f"✅ Заказ №{order_id} оформлен.\n📍 {_delivery_text(address=address)}",
         reply_markup=main_menu(),
+<<<<<<< HEAD
     )
     notify_text = (
         f"📦 <b>Новый заказ</b>\n"
@@ -262,3 +284,6 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
             await bot.send_message(admin_id, notify_text)
         except Exception:
             continue
+=======
+    )
+>>>>>>> c4ee755809f682175bb23528418f91cd0328bbb4
