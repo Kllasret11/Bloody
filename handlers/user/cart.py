@@ -9,7 +9,7 @@ from keyboards.reply import (
     main_menu,
     remove_keyboard,
 )
-from loader import db, dp
+from loader import bot, config, db, dp
 from states import CheckoutState
 
 
@@ -23,6 +23,32 @@ def _delivery_text(
     if latitude is not None and longitude is not None:
         return f"Геопозиция: {latitude:.6f}, {longitude:.6f}"
     return "-"
+
+
+async def _notify_admins_about_order(
+    user: types.User,
+    order_id: int,
+    phone: str,
+    address: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> None:
+    delivery = _delivery_text(address=address, latitude=latitude, longitude=longitude)
+
+    text = (
+        "<b>🆕 Новый заказ</b>\n\n"
+        f"📦 Заказ: <b>№{order_id}</b>\n"
+        f"👤 Пользователь: {user.full_name}\n"
+        f"🆔 ID: <code>{user.id}</code>\n"
+        f"📞 Телефон: {phone}\n"
+        f"📍 Доставка: {delivery}"
+    )
+
+    for admin_id in config.admins:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception:
+            pass
 
 
 @dp.message_handler(lambda m: m.text == "🛒 Корзина")
@@ -172,6 +198,14 @@ async def checkout_location(message: types.Message, state: FSMContext) -> None:
             return
         raise
 
+    await _notify_admins_about_order(
+        user=message.from_user,
+        order_id=order_id,
+        phone=data["phone"],
+        latitude=location.latitude,
+        longitude=location.longitude,
+    )
+
     await state.finish()
     await message.answer(
         f"✅ Заказ №{order_id} оформлен.\n"
@@ -216,6 +250,13 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
             )
             return
         raise
+
+    await _notify_admins_about_order(
+        user=message.from_user,
+        order_id=order_id,
+        phone=data["phone"],
+        address=address,
+    )
 
     await state.finish()
     await message.answer(
