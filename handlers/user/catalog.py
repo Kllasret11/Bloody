@@ -1,4 +1,5 @@
 from aiogram import types
+from aiogram.utils.exceptions import MessageNotModified
 
 from keyboards.inline import categories_kb, product_item_kb
 from loader import db, dp
@@ -66,20 +67,21 @@ async def show_products(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("qty_plus:"))
 async def qty_plus(call: types.CallbackQuery):
-
     if not hit(call.from_user.id, "qty_plus", 0.2):
         await call.answer("Слишком часто.", show_alert=False)
         return
-
 
     _, product_id, qty = call.data.split(":")
 
     product_id = int(product_id)
     qty = int(qty) + 1
 
-    await call.message.edit_reply_markup(
-        reply_markup=product_item_kb(product_id, qty)
-    )
+    try:
+        await call.message.edit_reply_markup(
+            reply_markup=product_item_kb(product_id, qty)
+        )
+    except MessageNotModified:
+        pass
 
     await call.answer()
 
@@ -88,20 +90,21 @@ async def qty_plus(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("qty_minus:"))
 async def qty_minus(call: types.CallbackQuery):
-
     if not hit(call.from_user.id, "qty_minus", 0.2):
         await call.answer("Слишком часто.", show_alert=False)
         return
-
 
     _, product_id, qty = call.data.split(":")
 
     product_id = int(product_id)
     qty = max(1, int(qty) - 1)
 
-    await call.message.edit_reply_markup(
-        reply_markup=product_item_kb(product_id, qty)
-    )
+    try:
+        await call.message.edit_reply_markup(
+            reply_markup=product_item_kb(product_id, qty)
+        )
+    except MessageNotModified:
+        pass
 
     await call.answer()
 
@@ -110,11 +113,9 @@ async def qty_minus(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("addcart:"))
 async def add_to_cart(call: types.CallbackQuery):
-
     if not hit(call.from_user.id, "addcart", 0.5):
         await call.answer("Слишком часто.", show_alert=False)
         return
-
 
     data = call.data.split(":")
 
