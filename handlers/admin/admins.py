@@ -2,6 +2,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from keyboards.reply import back_menu
 from loader import dp, db, config
 
 
@@ -41,6 +42,7 @@ async def add_admin_start(call: types.CallbackQuery, state: FSMContext):
         "Введите <b>user_id</b> пользователя, которого нужно сделать администратором:",
         reply_markup=admins_back_keyboard(),
     )
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 

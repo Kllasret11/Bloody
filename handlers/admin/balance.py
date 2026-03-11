@@ -2,6 +2,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from keyboards.reply import back_menu
 from loader import dp, db
 
 
@@ -68,7 +69,7 @@ async def balance_get_user(message: types.Message, state: FSMContext):
     await state.update_data(user_id=int(raw_user_id))
     await BalanceState.waiting_for_amount.set()
 
-    await message.answer("Введите сумму:", reply_markup=balance_back_keyboard())
+    await message.answer("Введите сумму:", reply_markup=back_menu())
 
 
 @dp.message_handler(state=BalanceState.waiting_for_amount)

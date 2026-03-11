@@ -1,13 +1,30 @@
 from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+
+from keyboards.reply import back_menu
 from loader import dp, db
+
+
+class ProductCreateState(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_description = State()
+    waiting_for_price = State()
+    waiting_for_stock = State()
 
 
 def products_menu_keyboard():
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     keyboard.add(types.InlineKeyboardButton("➕ Добавить товар", callback_data="product_add"))
     keyboard.add(types.InlineKeyboardButton("📋 Список товаров", callback_data="product_list"))
-    keyboard.add(types.InlineKeyboardButton("❌ Удалить товар", callback_data="product_delete"))
+    keyboard.add(types.InlineKeyboardButton("❌ Удалить товар", callback_data="product_delete_menu"))
     keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    return keyboard
+
+
+def back_to_products_keyboard():
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_products"))
     return keyboard
 
 
@@ -20,11 +37,102 @@ async def admin_products(call: types.CallbackQuery):
     await call.answer()
 
 
+@dp.callback_query_handler(lambda c: c.data == "product_add")
+async def product_add_start(call: types.CallbackQuery, state: FSMContext):
+    await ProductCreateState.waiting_for_name.set()
+    await call.message.edit_text(
+        "✏️ Введите название товара:",
+        reply_markup=back_to_products_keyboard(),
+    )
+    await call.message.answer("Можно нажать ⬅ Назад внизу, чтобы отменить создание товара.", reply_markup=back_menu())
+    await call.answer()
+
+
+@dp.message_handler(state=ProductCreateState.waiting_for_name)
+async def product_add_name(message: types.Message, state: FSMContext):
+    name = (message.text or "").strip()
+
+    if not name:
+        await message.answer("❌ Название товара не может быть пустым.")
+        return
+
+    await state.update_data(name=name)
+    await ProductCreateState.waiting_for_description.set()
+    await message.answer("📝 Введите описание товара:", reply_markup=back_menu())
+
+
+@dp.message_handler(state=ProductCreateState.waiting_for_description)
+async def product_add_description(message: types.Message, state: FSMContext):
+    description = (message.text or "").strip()
+
+    await state.update_data(description=description)
+    await ProductCreateState.waiting_for_price.set()
+    await message.answer("💰 Введите цену товара:", reply_markup=back_menu())
+
+
+@dp.message_handler(state=ProductCreateState.waiting_for_price)
+async def product_add_price(message: types.Message, state: FSMContext):
+    raw_price = (message.text or "").strip().replace(",", ".")
+
+    try:
+        price = float(raw_price)
+    except ValueError:
+        await message.answer("❌ Цена должна быть числом.")
+        return
+
+    if price <= 0:
+        await message.answer("❌ Цена должна быть больше 0.")
+        return
+
+    await state.update_data(price=price)
+    await ProductCreateState.waiting_for_stock.set()
+    await message.answer("📦 Введите количество товара на складе:", reply_markup=back_menu())
+
+
+@dp.message_handler(state=ProductCreateState.waiting_for_stock)
+async def product_add_stock(message: types.Message, state: FSMContext):
+    raw_stock = (message.text or "").strip()
+
+    if not raw_stock.isdigit():
+        await message.answer("❌ Количество должно быть целым числом.")
+        return
+
+    stock = int(raw_stock)
+    data = await state.get_data()
+
+    name = data["name"]
+    description = data["description"]
+    price = float(data["price"])
+
+    # category_id=1 как временное решение, пока не сделали выбор категорий в админке
+    await db.execute(
+        """
+        INSERT INTO products (category_id, name, description, price, stock, is_active)
+        VALUES ($1, $2, $3, $4, $5, TRUE)
+        """,
+        1,
+        name,
+        description,
+        price,
+        stock,
+    )
+
+    await state.finish()
+
+    await message.answer(
+        f"✅ Товар <b>{name}</b> добавлен.\n\n"
+        f"📝 Описание: {description or '-'}\n"
+        f"💰 Цена: {price:.2f}\n"
+        f"📦 Остаток: {stock}",
+        reply_markup=products_menu_keyboard(),
+    )
+
+
 @dp.callback_query_handler(lambda c: c.data == "product_list")
 async def product_list(call: types.CallbackQuery):
     products = await db.fetch(
         """
-        SELECT id, name, price
+        SELECT id, name, description, price, stock
         FROM products
         WHERE is_active = TRUE
         ORDER BY id DESC
@@ -32,20 +140,23 @@ async def product_list(call: types.CallbackQuery):
     )
 
     if not products:
-        keyboard = types.InlineKeyboardMarkup()
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
         keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_products"))
         await call.message.edit_text(
             "❌ Товаров нет",
             reply_markup=keyboard,
         )
+        await call.answer()
         return
 
     keyboard = types.InlineKeyboardMarkup(row_width=1)
-
     text = "🛍 <b>Список товаров</b>\n\n"
 
     for product in products:
-        text += f"• {product['name']} — {float(product['price']):.2f}\n"
+        text += (
+            f"• {product['name']} — {float(product['price']):.2f}"
+            f" | Остаток: {int(product['stock'])}\n"
+        )
 
         keyboard.add(
             types.InlineKeyboardButton(
@@ -66,7 +177,7 @@ async def product_open(call: types.CallbackQuery):
 
     product = await db.fetchrow(
         """
-        SELECT id, name, description, price
+        SELECT id, name, description, price, stock
         FROM products
         WHERE id = $1
         """,
@@ -80,7 +191,8 @@ async def product_open(call: types.CallbackQuery):
     text = (
         f"🛍 <b>{product['name']}</b>\n\n"
         f"📝 Описание: {product['description'] or '-'}\n"
-        f"💰 Цена: {float(product['price']):.2f}"
+        f"💰 Цена: {float(product['price']):.2f}\n"
+        f"📦 Остаток: {int(product['stock'])}"
     )
 
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -93,6 +205,45 @@ async def product_open(call: types.CallbackQuery):
     keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="product_list"))
 
     await call.message.edit_text(text, reply_markup=keyboard)
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "product_delete_menu")
+async def product_delete_menu(call: types.CallbackQuery):
+    products = await db.fetch(
+        """
+        SELECT id, name
+        FROM products
+        WHERE is_active = TRUE
+        ORDER BY id DESC
+        """
+    )
+
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    if not products:
+        keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_products"))
+        await call.message.edit_text(
+            "❌ Нет товаров для удаления.",
+            reply_markup=keyboard,
+        )
+        await call.answer()
+        return
+
+    for product in products:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"❌ {product['name']}",
+                callback_data=f"product_remove:{product['id']}",
+            )
+        )
+
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_products"))
+
+    await call.message.edit_text(
+        "Выберите товар для удаления:",
+        reply_markup=keyboard,
+    )
     await call.answer()
 
 
@@ -109,7 +260,7 @@ async def product_remove(call: types.CallbackQuery):
         product_id,
     )
 
-    keyboard = types.InlineKeyboardMarkup()
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
     keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="product_list"))
 
     await call.message.edit_text(

@@ -3,11 +3,11 @@ from aiogram.dispatcher import FSMContext
 
 from keyboards.inline import cart_item_kb, checkout_kb
 from keyboards.reply import (
+    back_menu,
     contact_request_menu,
     delivery_method_menu,
     location_request_menu,
     main_menu,
-    remove_keyboard,
 )
 from loader import bot, config, db, dp
 from states import CheckoutState
@@ -130,7 +130,7 @@ async def start_checkout(call: types.CallbackQuery, state: FSMContext) -> None:
     await state.finish()
     await CheckoutState.waiting_for_phone.set()
     await call.message.answer(
-        "Нажми кнопку ниже, чтобы отправить номер телефона.",
+        "Нажми кнопку ниже, чтобы отправить номер телефона.\n\nМожно нажать ⬅ Назад для отмены.",
         reply_markup=contact_request_menu(),
     )
     await call.answer()
@@ -178,7 +178,7 @@ async def checkout_manual_address(message: types.Message) -> None:
     await CheckoutState.waiting_for_address.set()
     await message.answer(
         "Введите адрес доставки:",
-        reply_markup=remove_keyboard(),
+        reply_markup=back_menu(),
     )
 
 
@@ -189,7 +189,7 @@ async def checkout_manual_address(message: types.Message) -> None:
 async def checkout_request_location(message: types.Message) -> None:
     await CheckoutState.waiting_for_location.set()
     await message.answer(
-        "Отправьте геопозицию доставки.",
+        "Отправьте геопозицию доставки.\n\nИли нажмите ⬅ Назад.",
         reply_markup=location_request_menu(),
     )
 

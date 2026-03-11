@@ -2,7 +2,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 
 from keyboards.inline import reorder_kb
-from keyboards.reply import main_menu
+from keyboards.reply import back_menu, main_menu
 from loader import config, db, dp, bot
 from states import SosState
 from utils.cooldown import hit
@@ -100,7 +100,7 @@ async def reorder(call: types.CallbackQuery) -> None:
 @dp.message_handler(lambda m: m.text == "🆘 SOS")
 async def sos_start(message: types.Message, state: FSMContext) -> None:
     await SosState.waiting_for_message.set()
-    await message.answer("Опиши проблему одним сообщением:")
+    await message.answer("Опиши проблему одним сообщением:", reply_markup=back_menu())
 
 
 @dp.message_handler(state=SosState.waiting_for_message)
