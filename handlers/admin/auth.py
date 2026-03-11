@@ -17,6 +17,7 @@ async def admin_login_start(message: types.Message, state: FSMContext) -> None:
         return
     await state.finish()
     await AdminAuthState.waiting_for_login.set()
+    await db.log_admin_action(message.from_user.id, "admin_login_start")
     await message.answer("Введи логин администратора:")
 
 
@@ -35,9 +36,11 @@ async def admin_password_input(message: types.Message, state: FSMContext) -> Non
 
     if login == config.admin_login and password == config.admin_password:
         await db.set_admin_session(message.from_user.id, True)
+        await db.log_admin_action(message.from_user.id, "admin_login_success")
         await state.finish()
         await message.answer("Вход выполнен. Добро пожаловать в админ-панель.", reply_markup=admin_menu())
         return
 
+    await db.log_admin_action(message.from_user.id, "admin_login_failed")
     await state.finish()
     await message.answer("Неверный логин или пароль.")

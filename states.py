@@ -13,6 +13,7 @@ class AddCategoryState(StatesGroup):
 class AddProductState(StatesGroup):
     waiting_for_name = State()
     waiting_for_price = State()
+    waiting_for_stock = State()
     waiting_for_category = State()
     waiting_for_photo = State()
 
@@ -27,11 +28,34 @@ class AddBalanceState(StatesGroup):
     waiting_for_amount = State()
 
 
+class DeleteProductState(StatesGroup):
+    waiting_for_product_id = State()
+
+
+class DeleteCategoryState(StatesGroup):
+    waiting_for_category_id = State()
+
+
+class EditCategoryState(StatesGroup):
+    waiting_for_category_id = State()
+    waiting_for_new_name = State()
+
+
+class EditProductState(StatesGroup):
+    waiting_for_product_id = State()
+    waiting_for_new_name = State()
+    waiting_for_new_price = State()
+    waiting_for_new_stock = State()
+    waiting_for_new_category = State()
+    waiting_for_new_photo = State()
+
+
 class CheckoutState(StatesGroup):
     waiting_for_phone = State()
     waiting_for_delivery_method = State()
     waiting_for_location = State()
     waiting_for_address = State()
+    waiting_for_promo = State()
 
 
 class SosState(StatesGroup):
@@ -43,24 +67,5 @@ class AdminReplySosState(StatesGroup):
     waiting_for_reply = State()
 
 
-# ===== НОВЫЕ СОСТОЯНИЯ =====
-
-class DeleteProductState(StatesGroup):
-    waiting_for_product_id = State()
-
-
-class DeleteCategoryState(StatesGroup):
-    waiting_for_category_id = State()
-
-
-class EditProductState(StatesGroup):
-    waiting_for_product_id = State()
-    waiting_for_new_name = State()
-    waiting_for_new_price = State()
-    waiting_for_new_photo = State()
-    waiting_for_new_category = State()
-
-
-class EditCategoryState(StatesGroup):
-    waiting_for_category_id = State()
-    waiting_for_new_name = State()
+class FindUserState(StatesGroup):
+    waiting_for_user_id = State()

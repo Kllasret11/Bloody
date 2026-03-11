@@ -1,9 +1,26 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
+from keyboards.inline import reorder_kb
 from keyboards.reply import main_menu
 from loader import config, db, dp, bot
 from states import SosState
+from utils.cooldown import hit
+
+
+STATUS_LABELS = {
+    "new": "новый",
+    "processing": "в обработке",
+    "delivering": "доставляется",
+    "completed": "завершён",
+    "cancelled": "отменён",
+    "paid": "оплачен",
+}
+
+
+def _status_label(status: str) -> str:
+    status = (status or "").strip().lower()
+    return STATUS_LABELS.get(status, status or "-")
 
 
 def _order_delivery(order) -> str:
@@ -27,16 +44,56 @@ async def my_orders(message: types.Message) -> None:
         await message.answer("У тебя пока нет заказов.")
         return
 
-    lines = ["<b>Мои заказы</b>"]
-
+    await message.answer("<b>Мои заказы</b>")
     for order in orders[:20]:
-        lines.append(
-            f"№{order['id']} — {float(order['total_amount']):.2f} — {order['status']}\n"
+        text = (
+            f"№{order['id']} — {float(order['total_amount']):.2f} — {_status_label(str(order['status']))}\n"
             f"📍 {_order_delivery(order)}\n"
             f"📞 {order['phone'] or '-'}"
         )
+        await message.answer(text, reply_markup=reorder_kb(int(order["id"])))
 
-    await message.answer("\n\n".join(lines))
+
+@dp.callback_query_handler(lambda c: c.data.startswith("reorder:"))
+async def reorder(call: types.CallbackQuery) -> None:
+    if not hit(call.from_user.id, "reorder", 1.0):
+        await call.answer("Слишком часто.", show_alert=False)
+        return
+    order_id = int(call.data.split(":")[1])
+    items = await db.get_order_items(order_id)
+    if not items:
+        await call.answer("Не удалось найти позиции заказа.", show_alert=True)
+        return
+
+    added = 0
+    missing = []
+    for item in items:
+        product_id = item["product_id"]
+        if product_id is None:
+            missing.append(str(item["product_name"]))
+            continue
+
+        product = await db.get_product_available(int(product_id))
+        if not product:
+            missing.append(str(item["product_name"]))
+            continue
+
+        qty = int(item["quantity"])
+        await db.add_to_cart(call.from_user.id, int(product_id), qty)
+        added += 1
+
+    if added == 0:
+        await call.answer("Товары из заказа сейчас недоступны.", show_alert=True)
+        return
+
+    text = f"Добавил в корзину позиций: <b>{added}</b>."
+    if missing:
+        text += "\n\nНе в наличии:\n" + "\n".join(f"- {name}" for name in missing[:15])
+        if len(missing) > 15:
+            text += f"\n…и ещё {len(missing) - 15}"
+
+    await call.message.answer(text, reply_markup=main_menu())
+    await call.answer()
 
 
 @dp.message_handler(commands=["sos"])

@@ -1,4 +1,2 @@
-from .auth import dp
-from .panel import dp
-
-__all__ = ["dp"]
+from . import auth  # noqa: F401
+from . import panel  # noqa: F401

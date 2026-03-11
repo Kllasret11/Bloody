@@ -55,4 +55,30 @@ def checkout_kb() -> InlineKeyboardMarkup:
             callback_data="checkout"
         )
     )
+    kb.add(
+        InlineKeyboardButton(
+            "🏷 Ввести промокод",
+            callback_data="promo"
+        )
+    )
+    return kb
+
+
+def reorder_kb(order_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton(
+            "🔁 Повторить заказ",
+            callback_data=f"reorder:{int(order_id)}",
+        )
+    )
+    return kb
+
+
+def admin_order_status_kb(order_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.row(
+        InlineKeyboardButton("🚚 Доставляется", callback_data=f"ordstatus:{int(order_id)}:delivering"),
+        InlineKeyboardButton("✅ Завершён", callback_data=f"ordstatus:{int(order_id)}:completed"),
+    )
     return kb
