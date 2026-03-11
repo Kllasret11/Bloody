@@ -1,144 +1,137 @@
-from aiogram import Router, types, F
-from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import StateFilter
-from aiogram.fsm.state import State, StatesGroup
+from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from utils.database import Database
+from loader import dp, db
 
-router = Router()
 
-class PromoCreate(StatesGroup):
-code = State()
-percent = State()
+class PromoCreateState(StatesGroup):
+    waiting_for_code = State()
+    waiting_for_percent = State()
 
-def back_keyboard():
-return InlineKeyboardMarkup(
-inline_keyboard=[
-[InlineKeyboardButton(text="⬅ Назад", callback_data="admin_promos")]
-]
-)
 
-@router.callback_query(F.data == "promo_create")
-async def promo_create_start(callback: types.CallbackQuery, state: FSMContext):
-await state.set_state(PromoCreate.code)
-await callback.message.edit_text(
-"Введите название промокода\n\nПример: SALE10",
-reply_markup=back_keyboard()
-)
+def promo_back_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_promos"))
+    return keyboard
 
-@router.message(StateFilter(PromoCreate.code))
+
+@dp.callback_query_handler(lambda c: c.data == "promo_create")
+async def promo_create_start(call: types.CallbackQuery, state: FSMContext):
+    await PromoCreateState.waiting_for_code.set()
+    await call.message.edit_text(
+        "✏️ Введите название промокода\n\nПример: <code>SALE10</code>",
+        reply_markup=promo_back_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.message_handler(state=PromoCreateState.waiting_for_code)
 async def promo_create_code(message: types.Message, state: FSMContext):
-await state.update_data(code=message.text.upper())
-await state.set_state(PromoCreate.percent)
+    code = (message.text or "").strip().upper()
 
-```
-await message.answer(
-    "Введите процент скидки\n\nПример: 10"
-)
-```
+    if not code:
+        await message.answer("❌ Название промокода не может быть пустым.")
+        return
 
-@router.message(StateFilter(PromoCreate.percent))
-async def promo_create_percent(message: types.Message, state: FSMContext, db: Database):
-data = await state.get_data()
+    await state.update_data(code=code)
+    await PromoCreateState.waiting_for_percent.set()
 
-```
-code = data["code"]
-percent = int(message.text)
+    await message.answer("💸 Введите процент скидки\n\nПример: <code>10</code>")
 
-await db.execute(
-    """
-    INSERT INTO promo_codes (code, percent)
-    VALUES ($1, $2)
-    ON CONFLICT (code) DO NOTHING
-    """,
-    code,
-    percent
-)
 
-await state.clear()
+@dp.message_handler(state=PromoCreateState.waiting_for_percent)
+async def promo_create_percent(message: types.Message, state: FSMContext):
+    raw_percent = (message.text or "").strip()
 
-await message.answer(
-    f"✅ Промокод создан\n\nКод: {code}\nСкидка: {percent}%",
-    reply_markup=back_keyboard()
-)
-```
+    if not raw_percent.isdigit():
+        await message.answer("❌ Процент скидки должен быть числом.")
+        return
 
-@router.callback_query(F.data == "promo_list")
-async def promo_list(callback: types.CallbackQuery, db: Database):
-promos = await db.fetch(
-"""
-SELECT code, percent, used_count
-FROM promo_codes
-WHERE is_active = TRUE
-ORDER BY created_at DESC
-"""
-)
+    percent = int(raw_percent)
+    if percent < 1 or percent > 100:
+        await message.answer("❌ Процент скидки должен быть от 1 до 100.")
+        return
 
-```
-if not promos:
-    text = "❌ Промокодов нет"
-else:
-    text = "🎟 Активные промокоды\n\n"
-    for promo in promos:
-        text += f"{promo['code']} — {promo['percent']}% (использован: {promo['used_count']})\n"
+    data = await state.get_data()
+    code = data["code"]
 
-await callback.message.edit_text(
-    text,
-    reply_markup=back_keyboard()
-)
-```
+    await db.create_promo(code=code, percent=percent)
 
-@router.callback_query(F.data == "promo_delete")
-async def promo_delete_menu(callback: types.CallbackQuery, db: Database):
-promos = await db.fetch(
-"""
-SELECT code FROM promo_codes
-WHERE is_active = TRUE
-ORDER BY created_at DESC
-"""
-)
+    await state.finish()
 
-```
-if not promos:
-    await callback.message.edit_text(
-        "❌ Нет промокодов для удаления",
-        reply_markup=back_keyboard()
-    )
-    return
-
-keyboard = []
-
-for promo in promos:
-    keyboard.append(
-        [InlineKeyboardButton(
-            text=promo["code"],
-            callback_data=f"promo_remove_{promo['code']}"
-        )]
+    await message.answer(
+        f"✅ <b>Промокод создан</b>\n\n"
+        f"🏷 Код: <code>{code}</code>\n"
+        f"💸 Скидка: <b>{percent}%</b>",
+        reply_markup=promo_back_keyboard(),
     )
 
-keyboard.append(
-    [InlineKeyboardButton(text="⬅ Назад", callback_data="admin_promos")]
-)
 
-await callback.message.edit_text(
-    "Выберите промокод для удаления",
-    reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
-)
-```
+@dp.callback_query_handler(lambda c: c.data == "promo_list")
+async def promo_list(call: types.CallbackQuery):
+    promos = await db.get_all_promos()
 
-@router.callback_query(F.data.startswith("promo_remove_"))
-async def promo_remove(callback: types.CallbackQuery, db: Database):
-code = callback.data.replace("promo_remove_", "")
+    if not promos:
+        text = "❌ Промокодов пока нет."
+    else:
+        lines = ["🎟 <b>Промокоды</b>\n"]
+        for promo in promos:
+            status = "✅ Активен" if promo["is_active"] else "❌ Отключён"
+            used_count = int(promo["used_count"] or 0)
+            lines.append(
+                f"• <code>{promo['code']}</code> — <b>{promo['percent']}%</b>\n"
+                f"  {status} | использован: {used_count}"
+            )
+        text = "\n".join(lines)
 
-```
-await db.execute(
-    "UPDATE promo_codes SET is_active = FALSE WHERE code = $1",
-    code
-)
+    await call.message.edit_text(
+        text,
+        reply_markup=promo_back_keyboard(),
+    )
+    await call.answer()
 
-await callback.message.edit_text(
-    f"❌ Промокод {code} отключен",
-    reply_markup=back_keyboard()
-)
-```
+
+@dp.callback_query_handler(lambda c: c.data == "promo_delete")
+async def promo_delete_menu(call: types.CallbackQuery):
+    promos = await db.get_all_promos()
+    active_promos = [promo for promo in promos if promo["is_active"]]
+
+    if not active_promos:
+        await call.message.edit_text(
+            "❌ Нет активных промокодов для удаления.",
+            reply_markup=promo_back_keyboard(),
+        )
+        await call.answer()
+        return
+
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    for promo in active_promos:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                text=f"❌ {promo['code']}",
+                callback_data=f"promo_remove:{promo['code']}",
+            )
+        )
+
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_promos"))
+
+    await call.message.edit_text(
+        "Выберите промокод, который нужно отключить:",
+        reply_markup=keyboard,
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith("promo_remove:"))
+async def promo_remove(call: types.CallbackQuery):
+    code = call.data.split(":", 1)[1]
+
+    await db.deactivate_promo(code)
+
+    await call.message.edit_text(
+        f"❌ Промокод <code>{code}</code> отключён.",
+        reply_markup=promo_back_keyboard(),
+    )
+    await call.answer("Промокод отключён")

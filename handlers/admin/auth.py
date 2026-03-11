@@ -1,46 +1,64 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from keyboards.reply import admin_menu
-from loader import config, db, dp
-from states import AdminAuthState
-
-
-def _is_allowed_admin(user_id: int) -> bool:
-    return user_id in config.admins
+from loader import dp, config, db
 
 
-@dp.message_handler(commands=["admin"], state="*")
-async def admin_login_start(message: types.Message, state: FSMContext) -> None:
-    if not _is_allowed_admin(message.from_user.id):
-        await message.answer("У тебя нет доступа к админке.")
+class AdminAuthState(StatesGroup):
+    waiting_login = State()
+    waiting_password = State()
+
+
+async def _is_admin(user_id: int) -> bool:
+    if user_id == config.super_admin_id:
+        return True
+
+    if user_id in config.admins:
+        return True
+
+    return await db.is_admin(user_id)
+
+
+@dp.message_handler(Command("admin"))
+async def admin_login_start(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+
+    if await _is_admin(user_id):
+        await db.set_admin_session(user_id, True)
+        await message.answer("✅ Вы уже авторизованы как администратор.")
         return
-    await state.finish()
-    await AdminAuthState.waiting_for_login.set()
-    await db.log_admin_action(message.from_user.id, "admin_login_start")
-    await message.answer("Введи логин администратора:")
+
+    await AdminAuthState.waiting_login.set()
+    await message.answer("Введите логин администратора:")
 
 
-@dp.message_handler(state=AdminAuthState.waiting_for_login)
-async def admin_login_input(message: types.Message, state: FSMContext) -> None:
-    await state.update_data(login=message.text.strip())
-    await AdminAuthState.waiting_for_password.set()
-    await message.answer("Введи пароль администратора:")
-
-
-@dp.message_handler(state=AdminAuthState.waiting_for_password)
-async def admin_password_input(message: types.Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    login = data.get("login", "")
-    password = message.text.strip()
-
-    if login == config.admin_login and password == config.admin_password:
-        await db.set_admin_session(message.from_user.id, True)
-        await db.log_admin_action(message.from_user.id, "admin_login_success")
+@dp.message_handler(state=AdminAuthState.waiting_login)
+async def admin_login_enter(message: types.Message, state: FSMContext):
+    if message.text != config.admin_login:
+        await message.answer("❌ Неверный логин.")
         await state.finish()
-        await message.answer("Вход выполнен. Добро пожаловать в админ-панель.", reply_markup=admin_menu())
         return
 
-    await db.log_admin_action(message.from_user.id, "admin_login_failed")
+    await state.update_data(login_ok=True)
+    await AdminAuthState.waiting_password.set()
+
+    await message.answer("Введите пароль:")
+
+
+@dp.message_handler(state=AdminAuthState.waiting_password)
+async def admin_password_enter(message: types.Message, state: FSMContext):
+    if message.text != config.admin_password:
+        await message.answer("❌ Неверный пароль.")
+        await state.finish()
+        return
+
+    user_id = message.from_user.id
+
+    await db.add_admin(user_id)
+    await db.set_admin_session(user_id, True)
+
     await state.finish()
-    await message.answer("Неверный логин или пароль.")
+
+    await message.answer("✅ Авторизация администратора успешна.")

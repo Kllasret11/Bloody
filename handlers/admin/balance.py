@@ -1,86 +1,111 @@
-from aiogram import Router, types, F
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from utils.database import Database
+from loader import dp, db
 
-router = Router()
 
 class BalanceState(StatesGroup):
-user_id = State()
-amount = State()
-action = State()
+    waiting_for_user_id = State()
+    waiting_for_amount = State()
 
-@router.callback_query(F.data == "admin_balance")
-async def balance_menu(callback: types.CallbackQuery):
-keyboard = types.InlineKeyboardMarkup(
-inline_keyboard=[
-[types.InlineKeyboardButton(text="➕ Начислить баланс", callback_data="balance_add")],
-[types.InlineKeyboardButton(text="➖ Списать баланс", callback_data="balance_remove")],
-[types.InlineKeyboardButton(text="⬅ Назад", callback_data="admin_back")]
-]
-)
 
-```
-await callback.message.edit_text(
-    "💰 Управление балансом",
-    reply_markup=keyboard
-)
-```
+def balance_menu_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("➕ Начислить баланс", callback_data="balance_add"))
+    keyboard.add(types.InlineKeyboardButton("➖ Списать баланс", callback_data="balance_remove"))
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    return keyboard
 
-@router.callback_query(F.data == "balance_add")
-async def balance_add_start(callback: types.CallbackQuery, state: FSMContext):
-await state.update_data(action="add")
-await state.set_state(BalanceState.user_id)
 
-```
-await callback.message.edit_text(
-    "Введите user_id пользователя\n\n"
-    "Которому нужно начислить баланс"
-)
-```
+def balance_back_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_balance"))
+    return keyboard
 
-@router.callback_query(F.data == "balance_remove")
-async def balance_remove_start(callback: types.CallbackQuery, state: FSMContext):
-await state.update_data(action="remove")
-await state.set_state(BalanceState.user_id)
 
-```
-await callback.message.edit_text(
-    "Введите user_id пользователя\n\n"
-    "У которого нужно списать баланс"
-)
-```
+@dp.callback_query_handler(lambda c: c.data == "admin_balance")
+async def balance_menu(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "💰 <b>Управление балансом</b>",
+        reply_markup=balance_menu_keyboard(),
+    )
+    await call.answer()
 
-@router.message(BalanceState.user_id)
+
+@dp.callback_query_handler(lambda c: c.data == "balance_add")
+async def balance_add_start(call: types.CallbackQuery, state: FSMContext):
+    await state.update_data(action="add")
+    await BalanceState.waiting_for_user_id.set()
+
+    await call.message.edit_text(
+        "Введите <b>user_id</b> пользователя,\nкоторому нужно начислить баланс:",
+        reply_markup=balance_back_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "balance_remove")
+async def balance_remove_start(call: types.CallbackQuery, state: FSMContext):
+    await state.update_data(action="remove")
+    await BalanceState.waiting_for_user_id.set()
+
+    await call.message.edit_text(
+        "Введите <b>user_id</b> пользователя,\nу которого нужно списать баланс:",
+        reply_markup=balance_back_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.message_handler(state=BalanceState.waiting_for_user_id)
 async def balance_get_user(message: types.Message, state: FSMContext):
-await state.update_data(user_id=int(message.text))
-await state.set_state(BalanceState.amount)
+    raw_user_id = (message.text or "").strip()
 
-```
-await message.answer("Введите сумму")
-```
+    if not raw_user_id.isdigit():
+        await message.answer("❌ user_id должен быть числом.")
+        return
 
-@router.message(BalanceState.amount)
-async def balance_apply(message: types.Message, state: FSMContext, db: Database):
-data = await state.get_data()
+    await state.update_data(user_id=int(raw_user_id))
+    await BalanceState.waiting_for_amount.set()
 
-```
-user_id = data["user_id"]
-action = data["action"]
-amount = float(message.text)
+    await message.answer("Введите сумму:", reply_markup=balance_back_keyboard())
 
-if action == "remove":
-    amount = -amount
 
-await db.change_balance(user_id, amount)
+@dp.message_handler(state=BalanceState.waiting_for_amount)
+async def balance_apply(message: types.Message, state: FSMContext):
+    raw_amount = (message.text or "").strip().replace(",", ".")
 
-await state.clear()
+    try:
+        amount = float(raw_amount)
+    except ValueError:
+        await message.answer("❌ Сумма должна быть числом.")
+        return
 
-if amount > 0:
-    text = f"✅ Баланс начислен\n\nUser ID: {user_id}\nСумма: +{amount}"
-else:
-    text = f"➖ Баланс списан\n\nUser ID: {user_id}\nСумма: {amount}"
+    if amount <= 0:
+        await message.answer("❌ Сумма должна быть больше 0.")
+        return
 
-await message.answer(text)
-```
+    data = await state.get_data()
+    user_id = int(data["user_id"])
+    action = data["action"]
+
+    if action == "remove":
+        amount = -amount
+
+    await db.change_balance(user_id, amount)
+    await state.finish()
+
+    if amount > 0:
+        text = (
+            f"✅ <b>Баланс начислен</b>\n\n"
+            f"🪪 User ID: <code>{user_id}</code>\n"
+            f"💰 Сумма: <b>+{amount:.2f}</b>"
+        )
+    else:
+        text = (
+            f"➖ <b>Баланс списан</b>\n\n"
+            f"🪪 User ID: <code>{user_id}</code>\n"
+            f"💰 Сумма: <b>{amount:.2f}</b>"
+        )
+
+    await message.answer(text, reply_markup=balance_menu_keyboard())

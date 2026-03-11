@@ -18,31 +18,61 @@ STATUS_LABELS = {
 }
 
 
+ACTIVE_STATUSES = {"new", "processing", "confirmed", "cooking", "preparing", "delivery", "delivering"}
+ARCHIVE_STATUSES = {"completed", "done", "cancelled"}
+
+
 def _status_label(status: str) -> str:
     status = (status or "").strip().lower()
     return STATUS_LABELS.get(status, status or "—")
 
 
-def _order_card_keyboard(order_id: int) -> types.InlineKeyboardMarkup:
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("✅ Подтвердить", callback_data=f"admin_order_status:{order_id}:confirmed"),
-        types.InlineKeyboardButton("👨‍🍳 В работу", callback_data=f"admin_order_status:{order_id}:cooking"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("🚚 В пути", callback_data=f"admin_order_status:{order_id}:delivery"),
-        types.InlineKeyboardButton("✨ Завершить", callback_data=f"admin_order_status:{order_id}:completed"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("❌ Отменить", callback_data=f"admin_order_status:{order_id}:cancelled"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("⬅ Назад", callback_data="admin_orders"),
-    )
+def _admin_orders_root_keyboard() -> types.InlineKeyboardMarkup:
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("🆕 Активные заказы", callback_data="admin_orders_active"))
+    kb.add(types.InlineKeyboardButton("🕘 Архив заказов", callback_data="admin_orders_archive"))
+    kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
     return kb
 
 
-def _orders_list_keyboard(orders) -> types.InlineKeyboardMarkup:
+def _order_card_keyboard(order_id: int, status: str) -> types.InlineKeyboardMarkup:
+    status = (status or "").strip().lower()
+    kb = types.InlineKeyboardMarkup(row_width=2)
+
+    if status not in {"confirmed", "processing"}:
+        kb.add(
+            types.InlineKeyboardButton("✅ Подтвердить", callback_data=f"admin_order_status:{order_id}:confirmed")
+        )
+
+    if status not in {"cooking", "preparing"}:
+        kb.insert(
+            types.InlineKeyboardButton("👨‍🍳 В работу", callback_data=f"admin_order_status:{order_id}:cooking")
+        )
+
+    if status not in {"delivery", "delivering"}:
+        kb.add(
+            types.InlineKeyboardButton("🚚 В пути", callback_data=f"admin_order_status:{order_id}:delivery")
+        )
+
+    if status not in {"completed", "done"}:
+        kb.insert(
+            types.InlineKeyboardButton("✨ Завершить", callback_data=f"admin_order_status:{order_id}:completed")
+        )
+
+    if status != "cancelled":
+        kb.add(
+            types.InlineKeyboardButton("❌ Отменить", callback_data=f"admin_order_status:{order_id}:cancelled")
+        )
+
+    if status in ARCHIVE_STATUSES:
+        kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_orders_archive"))
+    else:
+        kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_orders_active"))
+
+    return kb
+
+
+def _orders_list_keyboard(orders, back_callback: str) -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup(row_width=1)
 
     for order in orders[:50]:
@@ -53,7 +83,7 @@ def _orders_list_keyboard(orders) -> types.InlineKeyboardMarkup:
             )
         )
 
-    kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data=back_callback))
     return kb
 
 
@@ -98,10 +128,10 @@ def _delivery_text(order) -> str:
     return "—"
 
 
-async def _build_order_text(order_id: int) -> str:
+async def _build_order_text(order_id: int) -> tuple[str, str]:
     order = await db.get_order(order_id)
     if not order:
-        return "❌ Заказ не найден."
+        return "❌ Заказ не найден.", "new"
 
     user = await db.get_user(int(order["user_id"]))
     items = await db.get_order_items(order_id)
@@ -114,6 +144,7 @@ async def _build_order_text(order_id: int) -> str:
         username = user["username"]
 
     username_text = f" (@{username})" if username else ""
+    status = str(order["status"] or "new").lower()
 
     text = (
         f"<b>📦 Заказ №{order_id}</b>\n\n"
@@ -123,20 +154,22 @@ async def _build_order_text(order_id: int) -> str:
         f"📍 <b>Доставка:</b> {_delivery_text(order)}\n\n"
         f"🛍 <b>Состав заказа:</b>\n{_items_full_text(items)}\n\n"
         f"💰 <b>Итого:</b> {float(order['total_amount']):.2f}\n"
-        f"📌 <b>Статус:</b> {_status_label(str(order['status']))}"
+        f"📌 <b>Статус:</b> {_status_label(status)}"
     )
-    return text
+    return text, status
 
 
-@dp.callback_query_handler(lambda c: c.data == "admin_orders")
-async def admin_orders_list(call: types.CallbackQuery):
-    orders = await db.get_all_orders()
+async def _show_orders_list(call: types.CallbackQuery, archive: bool = False):
+    orders = await db.get_archive_orders() if archive else await db.get_active_orders()
+
+    title = "🕘 <b>Архив заказов</b>" if archive else "🆕 <b>Активные заказы</b>"
+    back_callback = "admin_orders"
 
     if not orders:
         await call.message.edit_text(
-            "📦 Заказов пока нет.",
+            f"{title}\n\nЗаказов пока нет.",
             reply_markup=types.InlineKeyboardMarkup().add(
-                types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back")
+                types.InlineKeyboardButton("⬅ Назад", callback_data=back_callback)
             ),
         )
         await call.answer()
@@ -149,24 +182,43 @@ async def admin_orders_list(call: types.CallbackQuery):
             f"• №{order['id']} — {_items_short_text(items)} — {_status_label(str(order['status']))}"
         )
 
-    text = "<b>📦 Заказы</b>\n\n" + "\n".join(preview_lines)
+    text = f"{title}\n\n" + "\n".join(preview_lines)
 
     await call.message.edit_text(
         text,
-        reply_markup=_orders_list_keyboard(orders),
+        reply_markup=_orders_list_keyboard(orders, back_callback),
     )
     await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_orders")
+async def admin_orders_root(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "📦 <b>Управление заказами</b>",
+        reply_markup=_admin_orders_root_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_orders_active")
+async def admin_orders_active(call: types.CallbackQuery):
+    await _show_orders_list(call, archive=False)
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_orders_archive")
+async def admin_orders_archive(call: types.CallbackQuery):
+    await _show_orders_list(call, archive=True)
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("admin_open_order:"))
 async def admin_open_order(call: types.CallbackQuery):
     order_id = int(call.data.split(":")[1])
 
-    text = await _build_order_text(order_id)
+    text, status = await _build_order_text(order_id)
 
     await call.message.edit_text(
         text,
-        reply_markup=_order_card_keyboard(order_id),
+        reply_markup=_order_card_keyboard(order_id, status),
     )
     await call.answer()
 
@@ -181,13 +233,13 @@ async def admin_change_order_status(call: types.CallbackQuery):
         await call.answer("Заказ не найден", show_alert=True)
         return
 
-    await db.update_order_status(order_id, new_status)
+    await db.set_order_status(order_id, new_status, changed_by=call.from_user.id)
 
-    updated_text = await _build_order_text(order_id)
+    updated_text, updated_status = await _build_order_text(order_id)
 
     await call.message.edit_text(
         updated_text,
-        reply_markup=_order_card_keyboard(order_id),
+        reply_markup=_order_card_keyboard(order_id, updated_status),
     )
 
     user_id = int(order["user_id"])

@@ -59,6 +59,15 @@ class Database:
 
         await self.execute(
             """
+            CREATE TABLE IF NOT EXISTS admins (
+                user_id BIGINT PRIMARY KEY,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+
+        await self.execute(
+            """
             CREATE TABLE IF NOT EXISTS admin_sessions (
                 user_id BIGINT PRIMARY KEY,
                 is_logged_in BOOLEAN NOT NULL DEFAULT FALSE,
@@ -381,6 +390,38 @@ class Database:
             json.dumps(payload) if payload is not None else None,
         )
 
+    async def is_admin(self, user_id: int) -> bool:
+        row = await self.fetchrow(
+            "SELECT user_id FROM admins WHERE user_id = $1",
+            user_id,
+        )
+        return row is not None
+
+    async def add_admin(self, user_id: int) -> None:
+        await self.execute(
+            """
+            INSERT INTO admins (user_id)
+            VALUES ($1)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            user_id,
+        )
+
+    async def remove_admin(self, user_id: int) -> None:
+        await self.execute(
+            "DELETE FROM admins WHERE user_id = $1",
+            user_id,
+        )
+
+    async def list_admins(self):
+        return await self.fetch(
+            """
+            SELECT user_id, created_at
+            FROM admins
+            ORDER BY created_at ASC
+            """
+        )
+
     async def add_category(self, name: str) -> None:
         await self.execute(
             """
@@ -658,6 +699,67 @@ class Database:
             code,
         )
 
+    async def create_promo(
+        self,
+        code: str,
+        percent: int,
+        max_uses: int | None = None,
+        expires_at=None,
+        min_order_amount: float | None = None,
+    ) -> None:
+        code = (code or "").strip().upper()
+        await self.execute(
+            """
+            INSERT INTO promo_codes (
+                code,
+                percent,
+                max_uses,
+                expires_at,
+                min_order_amount
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (code) DO UPDATE SET
+                percent = EXCLUDED.percent,
+                max_uses = EXCLUDED.max_uses,
+                expires_at = EXCLUDED.expires_at,
+                min_order_amount = EXCLUDED.min_order_amount,
+                is_active = TRUE
+            """,
+            code,
+            percent,
+            max_uses,
+            expires_at,
+            min_order_amount,
+        )
+
+    async def get_all_promos(self):
+        return await self.fetch(
+            """
+            SELECT
+                code,
+                percent,
+                is_active,
+                max_uses,
+                used_count,
+                expires_at,
+                min_order_amount,
+                created_at
+            FROM promo_codes
+            ORDER BY created_at DESC
+            """
+        )
+
+    async def deactivate_promo(self, code: str) -> None:
+        code = (code or "").strip().upper()
+        await self.execute(
+            """
+            UPDATE promo_codes
+            SET is_active = FALSE
+            WHERE code = $1
+            """,
+            code,
+        )
+
     async def increment_promo_use(self, code: str, conn: asyncpg.Connection) -> None:
         code = (code or "").strip().upper()
         await conn.execute(
@@ -913,7 +1015,47 @@ class Database:
                 created_at
             FROM orders
             ORDER BY id DESC
-            LIMIT 50
+            LIMIT 100
+            """
+        )
+
+    async def get_active_orders(self):
+        return await self.fetch(
+            """
+            SELECT
+                id,
+                user_id,
+                total_amount,
+                address,
+                phone,
+                latitude,
+                longitude,
+                status,
+                created_at
+            FROM orders
+            WHERE status NOT IN ('completed', 'done', 'cancelled')
+            ORDER BY id DESC
+            LIMIT 100
+            """
+        )
+
+    async def get_archive_orders(self):
+        return await self.fetch(
+            """
+            SELECT
+                id,
+                user_id,
+                total_amount,
+                address,
+                phone,
+                latitude,
+                longitude,
+                status,
+                created_at
+            FROM orders
+            WHERE status IN ('completed', 'done', 'cancelled')
+            ORDER BY id DESC
+            LIMIT 100
             """
         )
 

@@ -1,117 +1,144 @@
-from aiogram import Router, types, F
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from config import SUPER_ADMIN_ID
-from utils.database import Database
+from loader import dp, db, config
 
-router = Router()
 
 class AddAdminState(StatesGroup):
-user_id = State()
+    waiting_for_user_id = State()
 
-@router.callback_query(F.data == "admin_admins")
-async def admins_menu(callback: types.CallbackQuery):
-keyboard = types.InlineKeyboardMarkup(
-inline_keyboard=[
-[types.InlineKeyboardButton(text="➕ Добавить администратора", callback_data="admin_add")],
-[types.InlineKeyboardButton(text="📋 Список администраторов", callback_data="admin_list")],
-[types.InlineKeyboardButton(text="➖ Удалить администратора", callback_data="admin_remove")],
-[types.InlineKeyboardButton(text="⬅ Назад", callback_data="admin_back")]
-]
-)
 
-```
-await callback.message.edit_text(
-    "🛠 Управление администраторами",
-    reply_markup=keyboard
-)
-```
+def admins_menu_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("➕ Добавить администратора", callback_data="admin_add"))
+    keyboard.add(types.InlineKeyboardButton("📋 Список администраторов", callback_data="admin_list"))
+    keyboard.add(types.InlineKeyboardButton("➖ Удалить администратора", callback_data="admin_remove"))
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    return keyboard
 
-@router.callback_query(F.data == "admin_add")
-async def add_admin_start(callback: types.CallbackQuery, state: FSMContext):
-await state.set_state(AddAdminState.user_id)
 
-```
-await callback.message.edit_text(
-    "Введите user_id пользователя, которого нужно сделать администратором"
-)
-```
+def admins_back_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_admins"))
+    return keyboard
 
-@router.message(AddAdminState.user_id)
-async def add_admin_finish(message: types.Message, state: FSMContext, db: Database):
-user_id = int(message.text)
 
-```
-await db.execute(
-    """
-    INSERT INTO admins (user_id)
-    VALUES ($1)
-    ON CONFLICT DO NOTHING
-    """,
-    user_id
-)
+@dp.callback_query_handler(lambda c: c.data == "admin_admins")
+async def admins_menu(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "🛠 <b>Управление администраторами</b>",
+        reply_markup=admins_menu_keyboard(),
+    )
+    await call.answer()
 
-await state.clear()
 
-await message.answer("✅ Пользователь добавлен в администраторы")
-```
+@dp.callback_query_handler(lambda c: c.data == "admin_add")
+async def add_admin_start(call: types.CallbackQuery, state: FSMContext):
+    await AddAdminState.waiting_for_user_id.set()
 
-@router.callback_query(F.data == "admin_list")
-async def admin_list(callback: types.CallbackQuery, db: Database):
-admins = await db.fetch("SELECT user_id FROM admins")
+    await call.message.edit_text(
+        "Введите <b>user_id</b> пользователя, которого нужно сделать администратором:",
+        reply_markup=admins_back_keyboard(),
+    )
+    await call.answer()
 
-```
-if not admins:
-    text = "❌ Администраторов нет"
-else:
-    text = "🛠 Список администраторов\n\n"
 
-    for admin in admins:
-        text += f"ID: {admin['user_id']}\n"
+@dp.message_handler(state=AddAdminState.waiting_for_user_id)
+async def add_admin_finish(message: types.Message, state: FSMContext):
+    raw_user_id = (message.text or "").strip()
 
-await callback.message.edit_text(text)
-```
+    if not raw_user_id.isdigit():
+        await message.answer("❌ user_id должен быть числом.")
+        return
 
-@router.callback_query(F.data == "admin_remove")
-async def admin_remove_menu(callback: types.CallbackQuery, db: Database):
-admins = await db.fetch("SELECT user_id FROM admins")
+    user_id = int(raw_user_id)
 
-```
-keyboard = []
+    await db.add_admin(user_id)
+    await state.finish()
 
-for admin in admins:
-    if admin["user_id"] == SUPER_ADMIN_ID:
-        continue
-
-    keyboard.append(
-        [types.InlineKeyboardButton(
-            text=str(admin["user_id"]),
-            callback_data=f"admin_delete_{admin['user_id']}"
-        )]
+    await message.answer(
+        f"✅ Пользователь <code>{user_id}</code> добавлен в администраторы.",
+        reply_markup=admins_menu_keyboard(),
     )
 
-keyboard.append([types.InlineKeyboardButton(text="⬅ Назад", callback_data="admin_admins")])
 
-await callback.message.edit_text(
-    "Выберите администратора для удаления",
-    reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
-)
-```
+@dp.callback_query_handler(lambda c: c.data == "admin_list")
+async def admin_list(call: types.CallbackQuery):
+    admins = await db.list_admins()
 
-@router.callback_query(F.data.startswith("admin_delete_"))
-async def admin_delete(callback: types.CallbackQuery, db: Database):
-user_id = int(callback.data.replace("admin_delete_", ""))
+    lines = ["🛠 <b>Список администраторов</b>\n"]
 
-```
-if user_id == SUPER_ADMIN_ID:
-    await callback.answer("❌ Нельзя удалить супер администратора")
-    return
+    if config.super_admin_id:
+        lines.append(f"• <code>{config.super_admin_id}</code> — SUPER ADMIN")
 
-await db.execute(
-    "DELETE FROM admins WHERE user_id = $1",
-    user_id
-)
+    if admins:
+        for admin in admins:
+            user_id = int(admin["user_id"])
+            if user_id == config.super_admin_id:
+                continue
+            lines.append(f"• <code>{user_id}</code>")
+    else:
+        if not config.super_admin_id:
+            lines.append("❌ Администраторов нет.")
 
-await callback.message.edit_text("❌ Администратор удалён")
-```
+    await call.message.edit_text(
+        "\n".join(lines),
+        reply_markup=admins_back_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_remove")
+async def admin_remove_menu(call: types.CallbackQuery):
+    admins = await db.list_admins()
+
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    added_any = False
+    for admin in admins:
+        user_id = int(admin["user_id"])
+
+        if user_id == config.super_admin_id:
+            continue
+
+        keyboard.add(
+            types.InlineKeyboardButton(
+                text=f"❌ {user_id}",
+                callback_data=f"admin_delete:{user_id}",
+            )
+        )
+        added_any = True
+
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_admins"))
+
+    if not added_any:
+        await call.message.edit_text(
+            "❌ Нет администраторов для удаления.",
+            reply_markup=keyboard,
+        )
+        await call.answer()
+        return
+
+    await call.message.edit_text(
+        "Выберите администратора для удаления:",
+        reply_markup=keyboard,
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith("admin_delete:"))
+async def admin_delete(call: types.CallbackQuery):
+    user_id = int(call.data.split(":", 1)[1])
+
+    if user_id == config.super_admin_id:
+        await call.answer("❌ Нельзя удалить супер администратора.", show_alert=True)
+        return
+
+    await db.remove_admin(user_id)
+
+    await call.message.edit_text(
+        f"❌ Администратор <code>{user_id}</code> удалён.",
+        reply_markup=admins_back_keyboard(),
+    )
+    await call.answer("Администратор удалён")

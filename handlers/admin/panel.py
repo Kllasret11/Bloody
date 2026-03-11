@@ -1,79 +1,109 @@
-from aiogram import Router, types, F
-from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.context import FSMContext
+from aiogram import types
+from aiogram.dispatcher.filters import Command
 
-from config import SUPER_ADMIN_ID
-from utils.database import Database
+from loader import dp, db, config
 
-router = Router()
 
-def admin_panel_keyboard():
-return InlineKeyboardMarkup(
-inline_keyboard=[
-[
-InlineKeyboardButton(text="📦 Заказы", callback_data="admin_orders"),
-InlineKeyboardButton(text="🛍 Товары", callback_data="admin_products"),
-],
-[
-InlineKeyboardButton(text="📂 Категории", callback_data="admin_categories"),
-InlineKeyboardButton(text="🎟 Промокоды", callback_data="admin_promos"),
-],
-[
-InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users"),
-InlineKeyboardButton(text="💰 Баланс", callback_data="admin_balance"),
-],
-[
-InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"),
-InlineKeyboardButton(text="🛠 Администраторы", callback_data="admin_admins"),
-],
-[
-InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
-],
-]
-)
-
-@router.message(Command("admin"))
-async def admin_panel(message: types.Message, db: Database):
-user_id = message.from_user.id
-
-```
-if user_id != SUPER_ADMIN_ID:
-    is_admin = await db.fetchrow(
-        "SELECT user_id FROM admins WHERE user_id = $1",
-        user_id
+def admin_panel_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.row(
+        types.InlineKeyboardButton("📦 Заказы", callback_data="admin_orders"),
+        types.InlineKeyboardButton("🛍 Товары", callback_data="admin_products"),
     )
-    if not is_admin:
+    keyboard.row(
+        types.InlineKeyboardButton("📂 Категории", callback_data="admin_categories"),
+        types.InlineKeyboardButton("🎟 Промокоды", callback_data="admin_promos"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("👥 Пользователи", callback_data="admin_users"),
+        types.InlineKeyboardButton("💰 Баланс", callback_data="admin_balance"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast"),
+        types.InlineKeyboardButton("🛠 Администраторы", callback_data="admin_admins"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+    )
+    return keyboard
+
+
+def promo_menu_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("➕ Создать промокод", callback_data="promo_create"))
+    keyboard.add(types.InlineKeyboardButton("📋 Список промокодов", callback_data="promo_list"))
+    keyboard.add(types.InlineKeyboardButton("❌ Удалить промокод", callback_data="promo_delete"))
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    return keyboard
+
+
+async def _has_admin_access(user_id: int) -> bool:
+    if user_id == config.super_admin_id:
+        return True
+
+    if user_id in config.admins:
+        return True
+
+    return await db.is_admin(user_id)
+
+
+@dp.message_handler(Command("admin"))
+async def admin_panel(message: types.Message):
+    user_id = message.from_user.id
+
+    if not await _has_admin_access(user_id):
         await message.answer("❌ У вас нет доступа к админ панели")
         return
 
-await message.answer(
-    "⚙️ Админ панель",
-    reply_markup=admin_panel_keyboard()
-)
-```
+    await db.set_admin_session(user_id, True)
 
-@router.callback_query(F.data == "admin_promos")
-async def promo_menu(callback: types.CallbackQuery):
-keyboard = InlineKeyboardMarkup(
-inline_keyboard=[
-[InlineKeyboardButton(text="➕ Создать промокод", callback_data="promo_create")],
-[InlineKeyboardButton(text="📋 Список промокодов", callback_data="promo_list")],
-[InlineKeyboardButton(text="❌ Удалить промокод", callback_data="promo_delete")],
-[InlineKeyboardButton(text="⬅ Назад", callback_data="admin_back")]
-]
-)
+    await message.answer(
+        "⚙️ <b>Админ панель</b>",
+        reply_markup=admin_panel_keyboard(),
+    )
 
-```
-await callback.message.edit_text(
-    "🎟 Управление промокодами",
-    reply_markup=keyboard
-)
-```
 
-@router.callback_query(F.data == "admin_back")
-async def back_admin(callback: types.CallbackQuery):
-await callback.message.edit_text(
-"⚙️ Админ панель",
-reply_markup=admin_panel_keyboard()
-)
+@dp.callback_query_handler(lambda c: c.data == "admin_back")
+async def back_admin(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "⚙️ <b>Админ панель</b>",
+        reply_markup=admin_panel_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_promos")
+async def promo_menu(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "🎟 <b>Управление промокодами</b>",
+        reply_markup=promo_menu_keyboard(),
+    )
+    await call.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_stats")
+async def admin_stats(call: types.CallbackQuery):
+    users = await db.fetchval("SELECT COUNT(*) FROM users")
+    orders = await db.fetchval("SELECT COUNT(*) FROM orders")
+    products = await db.fetchval("SELECT COUNT(*) FROM products WHERE is_active = TRUE")
+    revenue = await db.fetchval(
+        """
+        SELECT COALESCE(SUM(total_amount), 0)
+        FROM orders
+        WHERE status IN ('completed', 'done')
+        """
+    )
+
+    text = (
+        "📊 <b>Статистика магазина</b>\n\n"
+        f"👥 Пользователей: <b>{int(users or 0)}</b>\n"
+        f"📦 Заказов: <b>{int(orders or 0)}</b>\n"
+        f"🛍 Товаров: <b>{int(products or 0)}</b>\n"
+        f"💰 Оборот: <b>{float(revenue or 0):.2f}</b>"
+    )
+
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+
+    await call.message.edit_text(text, reply_markup=keyboard)
+    await call.answer()

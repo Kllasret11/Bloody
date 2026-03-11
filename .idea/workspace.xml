@@ -7,8 +7,18 @@
     <list default="true" id="70764d12-2ba7-439c-a53f-8f4d742caa98" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/handlers/admin/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/admin/admins.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/admins.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/admin/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/admin/balance.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/balance.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/admin/broadcast.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/broadcast.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/admin/orders.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/orders.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/handlers/admin/panel.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/panel.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/admin/promo.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/admin/promo.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/user/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/user/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/database.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -91,6 +101,7 @@
       <workItem from="1773214654101" duration="2953000" />
       <workItem from="1773246622658" duration="2916000" />
       <workItem from="1773251416317" duration="1157000" />
+      <workItem from="1773252766032" duration="3315000" />
     </task>
     <servers />
   </component>
