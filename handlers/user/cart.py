@@ -25,6 +25,19 @@ def _delivery_text(
     return "-"
 
 
+def _items_text(items) -> str:
+    if not items:
+        return "• Нет данных"
+
+    lines = []
+    for item in items:
+        name = str(item["name"])
+        qty = int(item["quantity"])
+        price = float(item["price"])
+        lines.append(f"• {name} — {qty} шт. × {price:.2f}")
+    return "\n".join(lines)
+
+
 async def _notify_admins_about_order(
     user: types.User,
     order_id: int,
@@ -34,6 +47,8 @@ async def _notify_admins_about_order(
     longitude: float | None = None,
 ) -> None:
     delivery = _delivery_text(address=address, latitude=latitude, longitude=longitude)
+    items = await db.get_order_items(order_id)
+    order = await db.get_order(order_id)
 
     text = (
         "<b>🆕 Новый заказ</b>\n\n"
@@ -41,12 +56,22 @@ async def _notify_admins_about_order(
         f"👤 Пользователь: {user.full_name}\n"
         f"🆔 ID: <code>{user.id}</code>\n"
         f"📞 Телефон: {phone}\n"
-        f"📍 Доставка: {delivery}"
+        f"📍 Доставка: {delivery}\n\n"
+        f"🛍 <b>Товары:</b>\n{_items_text(items)}\n\n"
+        f"💰 <b>Сумма:</b> {float(order['total_amount']):.2f}"
+    )
+
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "📦 Открыть заказ",
+            callback_data=f"admin_open_order:{order_id}",
+        )
     )
 
     for admin_id in config.admins:
         try:
-            await bot.send_message(admin_id, text)
+            await bot.send_message(admin_id, text, reply_markup=keyboard)
         except Exception:
             pass
 
