@@ -36,6 +36,7 @@ async def balance_menu(call: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == "balance_add")
 async def balance_add_start(call: types.CallbackQuery, state: FSMContext):
+    await state.finish()
     await state.update_data(action="add")
     await BalanceState.waiting_for_user_id.set()
 
@@ -43,11 +44,13 @@ async def balance_add_start(call: types.CallbackQuery, state: FSMContext):
         "Введите <b>user_id</b> пользователя,\nкоторому нужно начислить баланс:",
         reply_markup=balance_back_keyboard(),
     )
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
 @dp.callback_query_handler(lambda c: c.data == "balance_remove")
 async def balance_remove_start(call: types.CallbackQuery, state: FSMContext):
+    await state.finish()
     await state.update_data(action="remove")
     await BalanceState.waiting_for_user_id.set()
 
@@ -55,6 +58,7 @@ async def balance_remove_start(call: types.CallbackQuery, state: FSMContext):
         "Введите <b>user_id</b> пользователя,\nу которого нужно списать баланс:",
         reply_markup=balance_back_keyboard(),
     )
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
@@ -63,7 +67,7 @@ async def balance_get_user(message: types.Message, state: FSMContext):
     raw_user_id = (message.text or "").strip()
 
     if not raw_user_id.isdigit():
-        await message.answer("❌ user_id должен быть числом.")
+        await message.answer("❌ user_id должен быть числом.", reply_markup=back_menu())
         return
 
     await state.update_data(user_id=int(raw_user_id))
@@ -79,11 +83,11 @@ async def balance_apply(message: types.Message, state: FSMContext):
     try:
         amount = float(raw_amount)
     except ValueError:
-        await message.answer("❌ Сумма должна быть числом.")
+        await message.answer("❌ Сумма должна быть числом.", reply_markup=back_menu())
         return
 
     if amount <= 0:
-        await message.answer("❌ Сумма должна быть больше 0.")
+        await message.answer("❌ Сумма должна быть больше 0.", reply_markup=back_menu())
         return
 
     data = await state.get_data()

@@ -1,9 +1,9 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
-from keyboards.reply import back_menu, main_menu
+from keyboards.reply import main_menu
 from loader import dp
-from .panel import admin_panel_keyboard
+from handlers.admin.panel import admin_panel_keyboard
 
 
 ADMIN_STATES = {
@@ -17,6 +17,8 @@ ADMIN_STATES = {
     "ProductCreateState:waiting_for_description",
     "ProductCreateState:waiting_for_price",
     "ProductCreateState:waiting_for_stock",
+    "CategoryState:waiting_for_new_name",
+    "CategoryState:waiting_for_edit_name",
 }
 
 USER_STATES = {
@@ -29,9 +31,10 @@ USER_STATES = {
 }
 
 
-@dp.message_handler(lambda m: (m.text or '').strip() == "⬅ Назад", state="*")
+@dp.message_handler(lambda m: (m.text or "").strip() == "⬅ Назад", state="*")
 async def universal_back(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
+
     if not current_state:
         await message.answer("Ты уже в меню.", reply_markup=main_menu())
         return

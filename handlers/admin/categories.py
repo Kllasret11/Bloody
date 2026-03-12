@@ -1,8 +1,15 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from keyboards.reply import back_menu
 from loader import dp, db
-from states import CategoryState
+
+
+class CategoryState(StatesGroup):
+    waiting_for_new_name = State()
+    waiting_for_edit_name = State()
+
 
 
 def categories_menu_keyboard() -> types.InlineKeyboardMarkup:
@@ -13,9 +20,10 @@ def categories_menu_keyboard() -> types.InlineKeyboardMarkup:
     return kb
 
 
-def category_back_keyboard(target: str = "admin_categories") -> types.InlineKeyboardMarkup:
+
+def category_back_keyboard() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup(row_width=1)
-    kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data=target))
+    kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_categories"))
     return kb
 
 
@@ -28,27 +36,27 @@ async def categories_menu(call: types.CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data == "category_add")
 async def category_add_start(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
-    await state.update_data(scope="admin")
     await CategoryState.waiting_for_new_name.set()
     await call.message.edit_text("Введите название новой категории:", reply_markup=category_back_keyboard())
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
 @dp.message_handler(state=CategoryState.waiting_for_new_name)
 async def category_add_finish(message: types.Message, state: FSMContext):
     name = (message.text or "").strip()
-    if not name or name == "⬅ Назад":
-        await message.answer("❌ Название не может быть пустым.")
+    if not name:
+        await message.answer("❌ Название не может быть пустым.", reply_markup=back_menu())
         return
 
     created_id = await db.add_category(name)
     await state.finish()
     if created_id is None:
-        await message.answer("⚠️ Такая категория уже существует.")
+        await message.answer("⚠️ Такая категория уже существует.", reply_markup=categories_menu_keyboard())
         return
 
     await db.log_admin_action(message.from_user.id, "category_created", {"category_id": created_id, "name": name})
-    await message.answer(f"✅ Категория <b>{name}</b> добавлена.")
+    await message.answer(f"✅ Категория <b>{name}</b> добавлена.", reply_markup=categories_menu_keyboard())
 
 
 @dp.callback_query_handler(lambda c: c.data == "category_list")
@@ -87,9 +95,12 @@ async def category_open(call: types.CallbackQuery):
         kb.add(types.InlineKeyboardButton("❌ Удалить", callback_data=f"category_delete:{category_id}"))
     kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="category_list"))
 
-    text = f"📂 <b>{category['name']}</b>\n\nТоваров в категории: <b>{len(products)}</b>\n"
+    text = (
+        f"📂 <b>{category['name']}</b>\n\n"
+        f"Товаров в категории: <b>{len(products)}</b>\n"
+    )
     if products:
-        text += "\nЧтобы удалить категорию, сначала перенеси или скрой товары из неё."
+        text += "\nЧтобы удалить категорию, сначала перенеси или удали товары из неё."
 
     await call.message.edit_text(text, reply_markup=kb)
     await call.answer()
@@ -99,17 +110,18 @@ async def category_open(call: types.CallbackQuery):
 async def category_edit_start(call: types.CallbackQuery, state: FSMContext):
     category_id = int(call.data.split(":", 1)[1])
     await state.finish()
-    await state.update_data(scope="admin", category_id=category_id)
+    await state.update_data(category_id=category_id)
     await CategoryState.waiting_for_edit_name.set()
-    await call.message.edit_text("Введите новое название категории:", reply_markup=category_back_keyboard("category_list"))
+    await call.message.edit_text("Введите новое название категории:", reply_markup=category_back_keyboard())
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
 @dp.message_handler(state=CategoryState.waiting_for_edit_name)
 async def category_edit_finish(message: types.Message, state: FSMContext):
     new_name = (message.text or "").strip()
-    if not new_name or new_name == "⬅ Назад":
-        await message.answer("❌ Название не может быть пустым.")
+    if not new_name:
+        await message.answer("❌ Название не может быть пустым.", reply_markup=back_menu())
         return
 
     data = await state.get_data()
@@ -117,7 +129,7 @@ async def category_edit_finish(message: types.Message, state: FSMContext):
     await db.update_category_name(category_id, new_name)
     await db.log_admin_action(message.from_user.id, "category_updated", {"category_id": category_id, "name": new_name})
     await state.finish()
-    await message.answer(f"✅ Категория обновлена: <b>{new_name}</b>")
+    await message.answer(f"✅ Категория обновлена: <b>{new_name}</b>", reply_markup=categories_menu_keyboard())
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("category_delete:"))

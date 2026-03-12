@@ -20,6 +20,7 @@ def broadcast_back_keyboard() -> types.InlineKeyboardMarkup:
 
 @dp.callback_query_handler(lambda c: c.data == "admin_broadcast")
 async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
+    await state.finish()
     await BroadcastState.waiting_for_message.set()
 
     await call.message.edit_text(
@@ -27,6 +28,7 @@ async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
         "Оно будет отправлено всем пользователям, которые когда-либо запускали бота.",
         reply_markup=broadcast_back_keyboard(),
     )
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
@@ -35,7 +37,7 @@ async def broadcast_send(message: types.Message, state: FSMContext):
     text = (message.text or "").strip()
 
     if not text:
-        await message.answer("❌ Сообщение не может быть пустым.")
+        await message.answer("❌ Сообщение не может быть пустым.", reply_markup=back_menu())
         return
 
     users = await db.fetch("SELECT user_id FROM users ORDER BY created_at ASC")
