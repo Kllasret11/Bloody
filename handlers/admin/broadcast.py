@@ -4,7 +4,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from keyboards.common import back_menu
+from keyboards.reply import back_menu
 from loader import dp, db, bot
 
 
@@ -20,19 +20,29 @@ def broadcast_back_keyboard() -> types.InlineKeyboardMarkup:
 
 @dp.callback_query_handler(lambda c: c.data == "admin_broadcast")
 async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
+    await state.finish()
     await BroadcastState.waiting_for_message.set()
 
     await call.message.edit_text(
-        "📢 <b>Введите сообщение для рассылки</b>\n\n"
+        "📢 <b>Введите сообщение для рассылки</b>
+
+"
         "Оно будет отправлено всем пользователям, которые когда-либо запускали бота.",
         reply_markup=broadcast_back_keyboard(),
     )
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
 @dp.message_handler(state=BroadcastState.waiting_for_message)
 async def broadcast_send(message: types.Message, state: FSMContext):
     text = (message.text or "").strip()
+    if text == "⬅ Назад":
+        await state.finish()
+        await message.answer("⚙️ <b>Админ панель</b>", reply_markup=types.ReplyKeyboardRemove())
+        from .panel import admin_panel_keyboard
+        await message.answer("Выбери раздел:", reply_markup=admin_panel_keyboard())
+        return
 
     if not text:
         await message.answer("❌ Сообщение не может быть пустым.")
@@ -58,8 +68,12 @@ async def broadcast_send(message: types.Message, state: FSMContext):
     keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
 
     await message.answer(
-        f"📢 <b>Рассылка завершена</b>\n\n"
-        f"✅ Успешно отправлено: <b>{success}</b>\n"
+        f"📢 <b>Рассылка завершена</b>
+
+"
+        f"✅ Успешно отправлено: <b>{success}</b>
+"
         f"❌ Ошибок: <b>{failed}</b>",
-        reply_markup=keyboard,
+        reply_markup=types.ReplyKeyboardRemove(),
     )
+    await message.answer("Готово.", reply_markup=keyboard)

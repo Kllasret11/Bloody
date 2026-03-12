@@ -422,12 +422,13 @@ class Database:
             """
         )
 
-    async def add_category(self, name: str) -> None:
-        await self.execute(
+    async def add_category(self, name: str):
+        return await self.fetchval(
             """
             INSERT INTO categories (name)
             VALUES ($1)
             ON CONFLICT (name) DO NOTHING
+            RETURNING id
             """,
             name,
         )

@@ -2,16 +2,30 @@ from aiogram import types
 from aiogram.dispatcher.filters import Command
 
 from loader import dp, db, config
-from keyboards.admin import (
-    admin_main_keyboard,
-    admin_catalog_keyboard,
-    admin_finance_keyboard,
-    admin_communications_keyboard,
-)
 
 
 def admin_panel_keyboard() -> types.InlineKeyboardMarkup:
-    return admin_main_keyboard()
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.row(
+        types.InlineKeyboardButton("📦 Заказы", callback_data="admin_orders"),
+        types.InlineKeyboardButton("🛍 Товары", callback_data="admin_products"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("📂 Категории", callback_data="admin_categories"),
+        types.InlineKeyboardButton("🎟 Промокоды", callback_data="admin_promos"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("👥 Пользователи", callback_data="admin_users"),
+        types.InlineKeyboardButton("💰 Баланс", callback_data="admin_balance"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast"),
+        types.InlineKeyboardButton("🛠 Администраторы", callback_data="admin_admins"),
+    )
+    keyboard.row(
+        types.InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+    )
+    return keyboard
 
 
 def promo_menu_keyboard() -> types.InlineKeyboardMarkup:
@@ -19,7 +33,7 @@ def promo_menu_keyboard() -> types.InlineKeyboardMarkup:
     keyboard.add(types.InlineKeyboardButton("➕ Создать промокод", callback_data="promo_create"))
     keyboard.add(types.InlineKeyboardButton("📋 Список промокодов", callback_data="promo_list"))
     keyboard.add(types.InlineKeyboardButton("❌ Удалить промокод", callback_data="promo_delete"))
-    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_finance"))
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
     return keyboard
 
 
@@ -51,11 +65,13 @@ def admin_user_card_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
     return keyboard
 
 
-async def has_admin_access(user_id: int) -> bool:
+async def _has_admin_access(user_id: int) -> bool:
     if user_id == config.super_admin_id:
         return True
+
     if user_id in config.admins:
         return True
+
     return await db.is_admin(user_id)
 
 
@@ -63,35 +79,24 @@ async def has_admin_access(user_id: int) -> bool:
 async def admin_panel(message: types.Message):
     user_id = message.from_user.id
 
-    if not await has_admin_access(user_id):
+    if not await _has_admin_access(user_id):
         await message.answer("❌ У вас нет доступа к админ панели")
         return
 
     await db.set_admin_session(user_id, True)
-    await message.answer("⚙️ <b>Админ панель</b>", reply_markup=admin_main_keyboard())
+
+    await message.answer(
+        "⚙️ <b>Админ панель</b>",
+        reply_markup=admin_panel_keyboard(),
+    )
 
 
 @dp.callback_query_handler(lambda c: c.data == "admin_back")
 async def back_admin(call: types.CallbackQuery):
-    await call.message.edit_text("⚙️ <b>Админ панель</b>", reply_markup=admin_main_keyboard())
-    await call.answer()
-
-
-@dp.callback_query_handler(lambda c: c.data == "admin_catalog")
-async def admin_catalog(call: types.CallbackQuery):
-    await call.message.edit_text("🛍 <b>Каталог</b>", reply_markup=admin_catalog_keyboard())
-    await call.answer()
-
-
-@dp.callback_query_handler(lambda c: c.data == "admin_finance")
-async def admin_finance(call: types.CallbackQuery):
-    await call.message.edit_text("💳 <b>Финансы</b>", reply_markup=admin_finance_keyboard())
-    await call.answer()
-
-
-@dp.callback_query_handler(lambda c: c.data == "admin_communications")
-async def admin_communications(call: types.CallbackQuery):
-    await call.message.edit_text("📢 <b>Коммуникации</b>", reply_markup=admin_communications_keyboard())
+    await call.message.edit_text(
+        "⚙️ <b>Админ панель</b>",
+        reply_markup=admin_panel_keyboard(),
+    )
     await call.answer()
 
 

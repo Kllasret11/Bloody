@@ -1,15 +1,16 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
-from loader import dp
-from .panel import admin_panel_keyboard, has_admin_access
+from loader import dp, config
+from .panel import admin_panel_keyboard
 
 
 @dp.message_handler(commands=["admin"])
 async def admin_login(message: types.Message, state: FSMContext):
+
     user_id = message.from_user.id
 
-    if await has_admin_access(user_id):
+    if user_id in config.admins:
         await message.answer(
             "⚙️ Админ панель",
             reply_markup=admin_panel_keyboard()
