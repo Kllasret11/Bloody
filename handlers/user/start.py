@@ -16,7 +16,7 @@ WELCOME_TEXT = (
 async def _ensure_user(message: types.Message) -> None:
     payload = parse_referral_payload(message.get_args()) if message.get_args() else None
     await db.upsert_user(
-        user_id=message.from_user.id,
+        user_id=int(message.from_user.id),
         username=message.from_user.username,
         full_name=message.from_user.full_name,
         referrer_id=payload,

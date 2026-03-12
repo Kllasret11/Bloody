@@ -366,10 +366,23 @@ class Database:
                     )
 
     async def upsert_user(self, user_id: int, username: str | None, full_name: str, referrer_id: int | None = None) -> None:
+        user_id = int(user_id)
+        if referrer_id is not None:
+            try:
+                referrer_id = int(referrer_id)
+            except (TypeError, ValueError):
+                referrer_id = None
+
         await self.execute(
             """
             INSERT INTO users (user_id, username, full_name, referrer_id, referral_code)
-            VALUES ($1, $2, $3, CASE WHEN $4 = $1 THEN NULL ELSE $4 END, CONCAT('ref_', $1))
+            VALUES (
+                $1::bigint,
+                $2::text,
+                $3::text,
+                CASE WHEN $4::bigint = $1::bigint THEN NULL ELSE $4::bigint END,
+                CONCAT('ref_', $1::bigint)
+            )
             ON CONFLICT (user_id)
             DO UPDATE SET
                 username = EXCLUDED.username,
