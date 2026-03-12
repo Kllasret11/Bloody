@@ -99,6 +99,11 @@ async def reorder(call: types.CallbackQuery) -> None:
 @dp.message_handler(commands=["sos"])
 @dp.message_handler(lambda m: m.text == "🆘 SOS")
 async def sos_start(message: types.Message, state: FSMContext) -> None:
+    if not hit(message.from_user.id, "sos", 3.0):
+        await message.answer("Слишком часто. Попробуй чуть позже.")
+        return
+    await state.finish()
+    await state.update_data(scope="user")
     await SosState.waiting_for_message.set()
     await message.answer("Опиши проблему одним сообщением:", reply_markup=back_menu())
 

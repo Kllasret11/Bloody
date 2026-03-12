@@ -6,4 +6,5 @@ from . import admins
 from . import balance
 from . import broadcast
 from . import products
+from . import categories
 from . import navigation

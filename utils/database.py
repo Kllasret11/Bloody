@@ -52,6 +52,9 @@ class Database:
                 username TEXT,
                 full_name TEXT NOT NULL,
                 balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+                referrer_id BIGINT REFERENCES users(user_id) ON DELETE SET NULL,
+                referral_code TEXT UNIQUE,
+                referral_reward_granted BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
@@ -92,8 +95,10 @@ class Database:
                 id SERIAL PRIMARY KEY,
                 category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
+                description TEXT,
                 price NUMERIC(12,2) NOT NULL CHECK (price >= 0),
                 photo_file_id TEXT,
+                stock INTEGER NOT NULL DEFAULT 0,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
@@ -307,19 +312,75 @@ class Database:
                         """
                     )
 
-    async def upsert_user(self, user_id: int, username: str | None, full_name: str) -> None:
+                if current < 2:
+                    await conn.execute(
+                        """
+                        ALTER TABLE products
+                        ADD COLUMN IF NOT EXISTS description TEXT
+                        """
+                    )
+                    await conn.execute(
+                        """
+                        ALTER TABLE users
+                        ADD COLUMN IF NOT EXISTS referrer_id BIGINT REFERENCES users(user_id) ON DELETE SET NULL
+                        """
+                    )
+                    await conn.execute(
+                        """
+                        ALTER TABLE users
+                        ADD COLUMN IF NOT EXISTS referral_code TEXT
+                        """
+                    )
+                    await conn.execute(
+                        """
+                        ALTER TABLE users
+                        ADD COLUMN IF NOT EXISTS referral_reward_granted BOOLEAN NOT NULL DEFAULT FALSE
+                        """
+                    )
+                    await conn.execute(
+                        """
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code_unique
+                        ON users(referral_code)
+                        WHERE referral_code IS NOT NULL
+                        """
+                    )
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS referral_rewards (
+                            id SERIAL PRIMARY KEY,
+                            referrer_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                            referred_user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                            order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+                            reward_amount NUMERIC(12,2) NOT NULL,
+                            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                            UNIQUE(referred_user_id)
+                        )
+                        """
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO schema_migrations (version)
+                        VALUES (2)
+                        ON CONFLICT DO NOTHING
+                        """
+                    )
+
+    async def upsert_user(self, user_id: int, username: str | None, full_name: str, referrer_id: int | None = None) -> None:
         await self.execute(
             """
-            INSERT INTO users (user_id, username, full_name)
-            VALUES ($1, $2, $3)
+            INSERT INTO users (user_id, username, full_name, referrer_id, referral_code)
+            VALUES ($1, $2, $3, CASE WHEN $4 = $1 THEN NULL ELSE $4 END, CONCAT('ref_', $1))
             ON CONFLICT (user_id)
             DO UPDATE SET
                 username = EXCLUDED.username,
-                full_name = EXCLUDED.full_name
+                full_name = EXCLUDED.full_name,
+                referrer_id = COALESCE(users.referrer_id, EXCLUDED.referrer_id),
+                referral_code = COALESCE(users.referral_code, EXCLUDED.referral_code)
             """,
             user_id,
             username,
             full_name,
+            referrer_id,
         )
 
     async def get_user(self, user_id: int):
@@ -422,12 +483,13 @@ class Database:
             """
         )
 
-    async def add_category(self, name: str) -> None:
-        await self.execute(
+    async def add_category(self, name: str):
+        return await self.fetchval(
             """
             INSERT INTO categories (name)
             VALUES ($1)
             ON CONFLICT (name) DO NOTHING
+            RETURNING id
             """,
             name,
         )
@@ -474,30 +536,35 @@ class Database:
         price: float,
         photo_file_id: str | None = None,
         stock: int = 0,
-    ) -> None:
+        description: str | None = None,
+    ) -> int:
         stock = max(0, int(stock))
-        await self.execute(
+        product_id = await self.fetchval(
             """
             INSERT INTO products (
                 category_id,
                 name,
+                description,
                 price,
                 photo_file_id,
                 stock
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
             """,
             category_id,
             name,
+            description,
             price,
             photo_file_id,
             stock,
         )
+        return int(product_id)
 
     async def get_products_by_category(self, category_id: int):
         return await self.fetch(
             """
-            SELECT id, name, price, photo_file_id, stock
+            SELECT id, name, description, price, photo_file_id, stock
             FROM products
             WHERE category_id = $1 AND is_active = TRUE
             ORDER BY id
@@ -508,7 +575,7 @@ class Database:
     async def get_products_by_category_available(self, category_id: int):
         return await self.fetch(
             """
-            SELECT id, name, price, photo_file_id, stock
+            SELECT id, name, description, price, photo_file_id, stock
             FROM products
             WHERE category_id = $1 AND is_active = TRUE AND stock > 0
             ORDER BY id
@@ -537,7 +604,7 @@ class Database:
     async def get_product(self, product_id: int):
         return await self.fetchrow(
             """
-            SELECT id, category_id, name, price, photo_file_id, is_active, stock
+            SELECT id, category_id, name, description, price, photo_file_id, is_active, stock
             FROM products
             WHERE id = $1
             """,
@@ -547,7 +614,7 @@ class Database:
     async def get_product_available(self, product_id: int):
         return await self.fetchrow(
             """
-            SELECT id, category_id, name, price, photo_file_id, is_active, stock
+            SELECT id, category_id, name, description, price, photo_file_id, is_active, stock
             FROM products
             WHERE id = $1 AND is_active = TRUE AND stock > 0
             """,
@@ -626,6 +693,28 @@ class Database:
             """,
             product_id,
             category_id,
+        )
+
+    async def update_product_description(self, product_id: int, description: str | None) -> None:
+        await self.execute(
+            """
+            UPDATE products
+            SET description = $2
+            WHERE id = $1
+            """,
+            product_id,
+            description,
+        )
+
+    async def set_product_active(self, product_id: int, is_active: bool) -> None:
+        await self.execute(
+            """
+            UPDATE products
+            SET is_active = $2
+            WHERE id = $1
+            """,
+            product_id,
+            is_active,
         )
 
     async def delete_product(self, product_id: int) -> None:
@@ -926,6 +1015,7 @@ class Database:
                     None,
                 )
 
+        await self._grant_referral_reward_if_needed(user_id=int(user_id), order_id=int(order_id))
         return int(order_id)
 
     async def get_order(self, order_id: int):
@@ -1112,4 +1202,75 @@ class Database:
             """,
             ticket_id,
             reply_text,
+        )
+
+    async def _grant_referral_reward_if_needed(self, user_id: int, order_id: int) -> None:
+        user = await self.get_user(user_id)
+        if not user or user["referrer_id"] is None or bool(user["referral_reward_granted"]):
+            return
+
+        previous_orders = await self.fetchval(
+            "SELECT COUNT(*) FROM orders WHERE user_id = $1 AND id <> $2",
+            user_id,
+            order_id,
+        )
+        if int(previous_orders or 0) > 0:
+            return
+
+        from config import load_config
+        cfg = load_config()
+        reward_referrer = float(cfg.referral_reward_referrer)
+        reward_new = float(cfg.referral_reward_new_user)
+        referrer_id = int(user['referrer_id'])
+
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM referral_rewards WHERE referred_user_id = $1",
+                    user_id,
+                )
+                if exists:
+                    return
+                await conn.execute(
+                    "UPDATE users SET balance = balance + $2 WHERE user_id = $1",
+                    referrer_id, reward_referrer,
+                )
+                await conn.execute(
+                    "UPDATE users SET balance = balance + $2, referral_reward_granted = TRUE WHERE user_id = $1",
+                    user_id, reward_new,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO referral_rewards (referrer_id, referred_user_id, order_id, reward_amount)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (referred_user_id) DO NOTHING
+                    """,
+                    referrer_id, user_id, order_id, reward_referrer,
+                )
+
+    async def get_referral_stats(self, user_id: int) -> dict[str, float | int]:
+        referrals_count = await self.fetchval(
+            "SELECT COUNT(*) FROM users WHERE referrer_id = $1", user_id
+        )
+        successful_referrals = await self.fetchval(
+            "SELECT COUNT(*) FROM referral_rewards WHERE referrer_id = $1", user_id
+        )
+        earned_bonus = await self.fetchval(
+            "SELECT COALESCE(SUM(reward_amount), 0) FROM referral_rewards WHERE referrer_id = $1", user_id
+        )
+        return {
+            "referrals_count": int(referrals_count or 0),
+            "successful_referrals": int(successful_referrals or 0),
+            "earned_bonus": float(earned_bonus or 0),
+        }
+
+    async def get_order_status_history(self, order_id: int):
+        return await self.fetch(
+            """
+            SELECT order_id, status, changed_at, changed_by
+            FROM order_status_history
+            WHERE order_id = $1
+            ORDER BY id DESC
+            """,
+            order_id,
         )
