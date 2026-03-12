@@ -423,7 +423,7 @@ class Database:
         )
 
     async def add_category(self, name: str):
-        return await self.fetchval(
+        row = await self.fetchrow(
             """
             INSERT INTO categories (name)
             VALUES ($1)
@@ -432,6 +432,7 @@ class Database:
             """,
             name,
         )
+        return int(row["id"]) if row else None
 
     async def get_categories(self):
         return await self.fetch(

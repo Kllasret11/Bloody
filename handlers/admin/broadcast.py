@@ -1,102 +1,75 @@
+import asyncio
+
 from aiogram import types
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from loader import dp, db, bot
-from states import BroadcastStates
-
-
-def back_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(types.KeyboardButton("⬅ Назад"))
-    return kb
+from keyboards.reply import back_menu
+from loader import bot, db, dp
 
 
-async def send_admin_panel(message: types.Message):
-    kb = types.InlineKeyboardMarkup(row_width=2)
-
-    kb.add(
-        types.InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
-        types.InlineKeyboardButton("📦 Заказы", callback_data="admin_orders"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("👥 Пользователи", callback_data="admin_users"),
-        types.InlineKeyboardButton("🔎 Найти пользователя", callback_data="admin_find_user"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("➕ Добавить товар", callback_data="admin_add_product"),
-        types.InlineKeyboardButton("➕ Добавить категорию", callback_data="admin_add_category"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("✏️ Редактировать товар", callback_data="admin_edit_product"),
-        types.InlineKeyboardButton("✏️ Редактировать категорию", callback_data="admin_edit_category"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("🗑 Удалить товар", callback_data="admin_delete_product"),
-        types.InlineKeyboardButton("🗑 Удалить категорию", callback_data="admin_delete_category"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("💲 Изменить цену", callback_data="admin_change_price"),
-        types.InlineKeyboardButton("💰 Изменить баланс", callback_data="admin_change_balance"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("🆘 Обращения", callback_data="admin_sos"),
-        types.InlineKeyboardButton("✉️ Ответить на SOS", callback_data="admin_reply_sos"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("🚪 Выйти из админки", callback_data="admin_exit")
-    )
-
-    await message.answer("Админ панель", reply_markup=kb)
+class BroadcastState(StatesGroup):
+    waiting_for_message = State()
 
 
-@dp.callback_query_handler(text="admin_broadcast", state="*")
+def broadcast_back_keyboard() -> types.InlineKeyboardMarkup:
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    return keyboard
+
+
+@dp.callback_query_handler(lambda c: c.data == "admin_broadcast")
 async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
-    await state.set_state(BroadcastStates.message)
+    await state.finish()
+    await BroadcastState.waiting_for_message.set()
 
-    await call.message.answer(
+    await call.message.edit_text(
         "📢 <b>Введите сообщение для рассылки</b>\n\n"
         "Оно будет отправлено всем пользователям, которые когда-либо запускали бота.",
-        reply_markup=back_kb(),
-        parse_mode="HTML",
+        reply_markup=broadcast_back_keyboard(),
     )
+    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
-@dp.message_handler(text="⬅ Назад", state=BroadcastStates.message)
+@dp.message_handler(lambda m: (m.text or "").strip() == "⬅ Назад", state=BroadcastState.waiting_for_message)
 async def broadcast_back(message: types.Message, state: FSMContext):
     await state.finish()
-    await send_admin_panel(message)
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
+    await message.answer("↩️ Возврат в админ панель.", reply_markup=keyboard)
 
 
-@dp.message_handler(state=BroadcastStates.message)
+@dp.message_handler(state=BroadcastState.waiting_for_message)
 async def broadcast_send(message: types.Message, state: FSMContext):
-    if message.text == "⬅ Назад":
-        await state.finish()
-        await send_admin_panel(message)
+    text = (message.text or "").strip()
+
+    if not text:
+        await message.answer("❌ Сообщение не может быть пустым.")
         return
 
-    users = await db.get_all_users()
+    users = await db.fetch("SELECT user_id FROM users ORDER BY created_at ASC")
+
     success = 0
     failed = 0
 
     for user in users:
+        user_id = int(user["user_id"])
         try:
-            if isinstance(user, dict):
-                user_id = int(user["user_id"])
-            else:
-                user_id = int(user[0])
-
-            await bot.send_message(user_id, message.text)
+            await bot.send_message(user_id, text)
             success += 1
+            await asyncio.sleep(0.05)
         except Exception:
             failed += 1
 
     await state.finish()
 
-    await message.answer(
-        f"✅ Рассылка завершена\n\n"
-        f"Успешно отправлено: {success}\n"
-        f"Ошибок: {failed}"
-    )
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
 
-    await send_admin_panel(message)
+    await message.answer(
+        f"📢 <b>Рассылка завершена</b>\n\n"
+        f"✅ Успешно отправлено: <b>{success}</b>\n"
+        f"❌ Ошибок: <b>{failed}</b>",
+        reply_markup=keyboard,
+    )

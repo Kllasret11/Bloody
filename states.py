@@ -1,9 +1,6 @@
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
 
-class BroadcastStates(StatesGroup):
-    message = State()
-
 class AdminAuthState(StatesGroup):
     waiting_for_login = State()
     waiting_for_password = State()

@@ -1,7 +1,7 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
-from keyboards.reply import main_menu
+from keyboards.reply import back_menu, main_menu
 from loader import dp
 from .panel import admin_panel_keyboard
 
@@ -17,9 +17,6 @@ ADMIN_STATES = {
     "ProductCreateState:waiting_for_description",
     "ProductCreateState:waiting_for_price",
     "ProductCreateState:waiting_for_stock",
-    "ProductCreateState:waiting_for_category",
-    "CategoryState:waiting_for_new_name",
-    "CategoryState:waiting_for_edit_name",
 }
 
 USER_STATES = {
@@ -42,8 +39,7 @@ async def universal_back(message: types.Message, state: FSMContext):
     await state.finish()
 
     if current_state in ADMIN_STATES:
-        await message.answer("↩️ Возврат в админ панель.", reply_markup=types.ReplyKeyboardRemove())
-        await message.answer("⚙️ <b>Админ панель</b>", reply_markup=admin_panel_keyboard())
+        await message.answer("↩️ Возврат в админ панель.", reply_markup=admin_panel_keyboard())
         return
 
     if current_state in USER_STATES:

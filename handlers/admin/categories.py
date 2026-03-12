@@ -2,7 +2,6 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from keyboards.reply import back_menu
 from loader import dp, db
 
 
@@ -11,12 +10,14 @@ class CategoryState(StatesGroup):
     waiting_for_edit_name = State()
 
 
+
 def categories_menu_keyboard() -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(types.InlineKeyboardButton("➕ Добавить категорию", callback_data="category_add"))
     kb.add(types.InlineKeyboardButton("📋 Список категорий", callback_data="category_list"))
     kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_back"))
     return kb
+
 
 
 def category_back_keyboard() -> types.InlineKeyboardMarkup:
@@ -36,19 +37,12 @@ async def category_add_start(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
     await CategoryState.waiting_for_new_name.set()
     await call.message.edit_text("Введите название новой категории:", reply_markup=category_back_keyboard())
-    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
 @dp.message_handler(state=CategoryState.waiting_for_new_name)
 async def category_add_finish(message: types.Message, state: FSMContext):
     name = (message.text or "").strip()
-    if name == "⬅ Назад":
-        await state.finish()
-        await message.answer("⚙️ <b>Админ панель</b>", reply_markup=types.ReplyKeyboardRemove())
-        from .panel import admin_panel_keyboard
-        await message.answer("Выбери раздел:", reply_markup=admin_panel_keyboard())
-        return
     if not name:
         await message.answer("❌ Название не может быть пустым.")
         return
@@ -56,13 +50,11 @@ async def category_add_finish(message: types.Message, state: FSMContext):
     created_id = await db.add_category(name)
     await state.finish()
     if created_id is None:
-        await message.answer("⚠️ Такая категория уже существует.", reply_markup=types.ReplyKeyboardRemove())
-        await message.answer("📂 Управление категориями", reply_markup=categories_menu_keyboard())
+        await message.answer("⚠️ Такая категория уже существует.", reply_markup=categories_menu_keyboard())
         return
 
     await db.log_admin_action(message.from_user.id, "category_created", {"category_id": created_id, "name": name})
-    await message.answer("✅ Категория <b>{}</b> добавлена.".format(name), reply_markup=types.ReplyKeyboardRemove())
-    await message.answer("📂 Управление категориями", reply_markup=categories_menu_keyboard())
+    await message.answer(f"✅ Категория <b>{name}</b> добавлена.", reply_markup=categories_menu_keyboard())
 
 
 @dp.callback_query_handler(lambda c: c.data == "category_list")
@@ -76,15 +68,13 @@ async def category_list(call: types.CallbackQuery):
         await call.answer()
         return
 
-    lines = ["📂 <b>Категории</b>
-"]
+    lines = ["📂 <b>Категории</b>\n"]
     for category in categories:
         lines.append(f"• {category['name']}")
         kb.add(types.InlineKeyboardButton(category["name"], callback_data=f"category_open:{category['id']}"))
 
     kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="admin_categories"))
-    await call.message.edit_text("
-".join(lines), reply_markup=kb)
+    await call.message.edit_text("\n".join(lines), reply_markup=kb)
     await call.answer()
 
 
@@ -104,15 +94,11 @@ async def category_open(call: types.CallbackQuery):
     kb.add(types.InlineKeyboardButton("⬅ Назад", callback_data="category_list"))
 
     text = (
-        f"📂 <b>{category['name']}</b>
-
-"
-        f"Товаров в категории: <b>{len(products)}</b>
-"
+        f"📂 <b>{category['name']}</b>\n\n"
+        f"Товаров в категории: <b>{len(products)}</b>\n"
     )
     if products:
-        text += "
-Чтобы удалить категорию, сначала перенеси или удали товары из неё."
+        text += "\nЧтобы удалить категорию, сначала перенеси или удали товары из неё."
 
     await call.message.edit_text(text, reply_markup=kb)
     await call.answer()
@@ -125,19 +111,12 @@ async def category_edit_start(call: types.CallbackQuery, state: FSMContext):
     await state.update_data(category_id=category_id)
     await CategoryState.waiting_for_edit_name.set()
     await call.message.edit_text("Введите новое название категории:", reply_markup=category_back_keyboard())
-    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
 @dp.message_handler(state=CategoryState.waiting_for_edit_name)
 async def category_edit_finish(message: types.Message, state: FSMContext):
     new_name = (message.text or "").strip()
-    if new_name == "⬅ Назад":
-        await state.finish()
-        await message.answer("⚙️ <b>Админ панель</b>", reply_markup=types.ReplyKeyboardRemove())
-        from .panel import admin_panel_keyboard
-        await message.answer("Выбери раздел:", reply_markup=admin_panel_keyboard())
-        return
     if not new_name:
         await message.answer("❌ Название не может быть пустым.")
         return
@@ -147,8 +126,7 @@ async def category_edit_finish(message: types.Message, state: FSMContext):
     await db.update_category_name(category_id, new_name)
     await db.log_admin_action(message.from_user.id, "category_updated", {"category_id": category_id, "name": new_name})
     await state.finish()
-    await message.answer(f"✅ Категория обновлена: <b>{new_name}</b>", reply_markup=types.ReplyKeyboardRemove())
-    await message.answer("📂 Управление категориями", reply_markup=categories_menu_keyboard())
+    await message.answer(f"✅ Категория обновлена: <b>{new_name}</b>", reply_markup=categories_menu_keyboard())
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("category_delete:"))
