@@ -1,8 +1,10 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 
-from keyboards.reply import admin_menu, main_menu
+from keyboards.common import back_menu
+from keyboards.reply import main_menu
 from loader import dp
+from .panel import admin_panel_keyboard
 
 
 ADMIN_STATES = {
@@ -33,7 +35,6 @@ USER_STATES = {
 @dp.message_handler(lambda m: (m.text or '').strip() == "⬅ Назад", state="*")
 async def universal_back(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
-
     if not current_state:
         await message.answer("Ты уже в меню.", reply_markup=main_menu())
         return
@@ -41,7 +42,7 @@ async def universal_back(message: types.Message, state: FSMContext):
     await state.finish()
 
     if current_state in ADMIN_STATES:
-        await message.answer("↩️ Возврат в админ панель.", reply_markup=admin_menu())
+        await message.answer("↩️ Возврат в админ панель.", reply_markup=admin_panel_keyboard())
         return
 
     if current_state in USER_STATES:

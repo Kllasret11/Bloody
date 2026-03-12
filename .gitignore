@@ -1,31 +1,13 @@
-# IDE
-.idea/
-.vscode/
-
-# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+.env
+.idea/
+.git/
+venv/
+.venv/
 .pytest_cache/
 .mypy_cache/
-
-# Virtual env
-.venv/
-venv/
-
-# Env
-.env
-
-# Build
-dist/
-build/
-
-# OS
+.vscode/
 .DS_Store
 Thumbs.db
-
-# Local runtime
 *.log
-*.sqlite3
-*.db

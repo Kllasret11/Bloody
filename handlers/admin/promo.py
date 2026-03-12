@@ -2,7 +2,7 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from keyboards.reply import back_menu
+from keyboards.common import back_menu
 from loader import dp, db
 
 
@@ -19,13 +19,11 @@ def promo_back_keyboard() -> types.InlineKeyboardMarkup:
 
 @dp.callback_query_handler(lambda c: c.data == "promo_create")
 async def promo_create_start(call: types.CallbackQuery, state: FSMContext):
-    await state.finish()
     await PromoCreateState.waiting_for_code.set()
     await call.message.edit_text(
         "✏️ Введите название промокода\n\nПример: <code>SALE10</code>",
         reply_markup=promo_back_keyboard(),
     )
-    await call.message.answer("Можно нажать ⬅ Назад внизу для отмены.", reply_markup=back_menu())
     await call.answer()
 
 
@@ -34,13 +32,13 @@ async def promo_create_code(message: types.Message, state: FSMContext):
     code = (message.text or "").strip().upper()
 
     if not code:
-        await message.answer("❌ Название промокода не может быть пустым.", reply_markup=back_menu())
+        await message.answer("❌ Название промокода не может быть пустым.")
         return
 
     await state.update_data(code=code)
     await PromoCreateState.waiting_for_percent.set()
 
-    await message.answer("💸 Введите процент скидки\n\nПример: <code>10</code>", reply_markup=back_menu())
+    await message.answer("💸 Введите процент скидки\n\nПример: <code>10</code>")
 
 
 @dp.message_handler(state=PromoCreateState.waiting_for_percent)
@@ -48,12 +46,12 @@ async def promo_create_percent(message: types.Message, state: FSMContext):
     raw_percent = (message.text or "").strip()
 
     if not raw_percent.isdigit():
-        await message.answer("❌ Процент скидки должен быть числом.", reply_markup=back_menu())
+        await message.answer("❌ Процент скидки должен быть числом.")
         return
 
     percent = int(raw_percent)
     if percent < 1 or percent > 100:
-        await message.answer("❌ Процент скидки должен быть от 1 до 100.", reply_markup=back_menu())
+        await message.answer("❌ Процент скидки должен быть от 1 до 100.")
         return
 
     data = await state.get_data()

@@ -16,8 +16,6 @@ class Config:
     admin_password: str
     shop_title: str
     super_admin_id: int
-    referral_reward_referrer: int
-    referral_reward_new_user: int
 
 
 def _parse_admins(raw: str) -> List[int]:
@@ -57,6 +55,4 @@ def load_config() -> Config:
         admin_password=os.getenv("ADMIN_PASSWORD", "123"),
         shop_title=os.getenv("SHOP_TITLE", "Магазин"),
         super_admin_id=super_admin_id,
-        referral_reward_referrer=int(os.getenv("REFERRAL_REWARD_REFERRER", "1000")),
-        referral_reward_new_user=int(os.getenv("REFERRAL_REWARD_NEW_USER", "300")),
     )

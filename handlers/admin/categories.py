@@ -2,8 +2,8 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from keyboards.reply import back_menu
 from loader import dp, db
+from keyboards.common import back_menu
 
 
 class CategoryState(StatesGroup):
@@ -46,7 +46,7 @@ async def category_add_start(call: types.CallbackQuery, state: FSMContext):
 async def category_add_finish(message: types.Message, state: FSMContext):
     name = (message.text or "").strip()
     if not name:
-        await message.answer("❌ Название не может быть пустым.", reply_markup=back_menu())
+        await message.answer("❌ Название не может быть пустым.")
         return
 
     created_id = await db.add_category(name)
@@ -121,7 +121,7 @@ async def category_edit_start(call: types.CallbackQuery, state: FSMContext):
 async def category_edit_finish(message: types.Message, state: FSMContext):
     new_name = (message.text or "").strip()
     if not new_name:
-        await message.answer("❌ Название не может быть пустым.", reply_markup=back_menu())
+        await message.answer("❌ Название не может быть пустым.")
         return
 
     data = await state.get_data()

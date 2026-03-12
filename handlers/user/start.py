@@ -2,24 +2,22 @@ from aiogram import types
 
 from keyboards.reply import main_menu
 from loader import db, dp
-from services.referrals import parse_referral_payload
 
 WELCOME_TEXT = (
     "Привет! 👋\n\n"
-    "🤖 Я бот-магазин.\n\n"
-    "🛍 Используй каталог, корзину и личный кабинет.\n"
-    "👥 У тебя есть реферальная ссылка — зови друзей и получай бонусы.\n"
-    "🆘 Если возникли вопросы — нажми SOS."
+    "🤖 Я бот-магазин по продаже товаров любой категории.\n\n"
+    "🛍️ Чтобы перейти в каталог и выбрать приглянувшиеся товары воспользуйтесь командой /menu.\n\n"
+    "💰 Пополнить счет можно через Каспи или Qiwi.\n\n"
+    "❓ Возникли вопросы? Не проблема! Команда /sos поможет связаться с админами, которые постараются как можно быстрее откликнуться.\n\n"
+    "🤝 Нашли проблему? Свяжитесь с разработчиком Yan Krivolapov"
 )
 
 
 async def _ensure_user(message: types.Message) -> None:
-    payload = parse_referral_payload(message.get_args()) if message.get_args() else None
     await db.upsert_user(
-        user_id=int(message.from_user.id),
+        user_id=message.from_user.id,
         username=message.from_user.username,
         full_name=message.from_user.full_name,
-        referrer_id=payload,
     )
 
 

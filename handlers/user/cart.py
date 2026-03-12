@@ -128,7 +128,6 @@ async def start_checkout(call: types.CallbackQuery, state: FSMContext) -> None:
         return
 
     await state.finish()
-    await state.update_data(scope="user")
     await CheckoutState.waiting_for_phone.set()
     await call.message.answer(
         "Нажми кнопку ниже, чтобы отправить номер телефона.\n\nМожно нажать ⬅ Назад для отмены.",
