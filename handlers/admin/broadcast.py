@@ -2,7 +2,6 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 
 from loader import dp, db, bot
-from filters.is_admin import IsAdmin
 from states import BroadcastStates
 
 
@@ -14,6 +13,7 @@ def back_kb():
 
 async def send_admin_panel(message: types.Message):
     kb = types.InlineKeyboardMarkup(row_width=2)
+
     kb.add(
         types.InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
         types.InlineKeyboardButton("📦 Заказы", callback_data="admin_orders"),
@@ -42,33 +42,33 @@ async def send_admin_panel(message: types.Message):
         types.InlineKeyboardButton("🆘 Обращения", callback_data="admin_sos"),
         types.InlineKeyboardButton("✉️ Ответить на SOS", callback_data="admin_reply_sos"),
     )
-    kb.add(types.InlineKeyboardButton("🚪 Выйти из админки", callback_data="admin_exit"))
+    kb.add(
+        types.InlineKeyboardButton("🚪 Выйти из админки", callback_data="admin_exit")
+    )
 
     await message.answer("Админ панель", reply_markup=kb)
 
 
-@dp.callback_query_handler(IsAdmin(), text="admin_broadcast")
+@dp.callback_query_handler(text="admin_broadcast", state="*")
 async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
     await state.set_state(BroadcastStates.message)
 
     await call.message.answer(
-        (
-            "📢 <b>Введите сообщение для рассылки</b>\n\n"
-            "Оно будет отправлено всем пользователям, которые когда-либо запускали бота."
-        ),
+        "📢 <b>Введите сообщение для рассылки</b>\n\n"
+        "Оно будет отправлено всем пользователям, которые когда-либо запускали бота.",
         reply_markup=back_kb(),
         parse_mode="HTML",
     )
     await call.answer()
 
 
-@dp.message_handler(IsAdmin(), text="⬅ Назад", state=BroadcastStates.message)
+@dp.message_handler(text="⬅ Назад", state=BroadcastStates.message)
 async def broadcast_back(message: types.Message, state: FSMContext):
     await state.finish()
     await send_admin_panel(message)
 
 
-@dp.message_handler(IsAdmin(), state=BroadcastStates.message)
+@dp.message_handler(state=BroadcastStates.message)
 async def broadcast_send(message: types.Message, state: FSMContext):
     if message.text == "⬅ Назад":
         await state.finish()
@@ -81,7 +81,11 @@ async def broadcast_send(message: types.Message, state: FSMContext):
 
     for user in users:
         try:
-            user_id = int(user["user_id"]) if isinstance(user, dict) else int(user[0])
+            if isinstance(user, dict):
+                user_id = int(user["user_id"])
+            else:
+                user_id = int(user[0])
+
             await bot.send_message(user_id, message.text)
             success += 1
         except Exception:
@@ -90,10 +94,9 @@ async def broadcast_send(message: types.Message, state: FSMContext):
     await state.finish()
 
     await message.answer(
-        (
-            f"✅ Рассылка завершена\n\n"
-            f"Успешно отправлено: {success}\n"
-            f"Ошибок: {failed}"
-        )
+        f"✅ Рассылка завершена\n\n"
+        f"Успешно отправлено: {success}\n"
+        f"Ошибок: {failed}"
     )
+
     await send_admin_panel(message)
