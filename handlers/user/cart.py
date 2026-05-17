@@ -175,42 +175,15 @@ async def checkout_request_location(message: types.Message) -> None:
 )
 async def checkout_location(message: types.Message, state: FSMContext) -> None:
     location = message.location
-    data = await state.get_data()
-
-    try:
-        order_id = await db.create_order_from_cart(
-            user_id=message.from_user.id,
-            phone=data["phone"],
-            latitude=location.latitude,
-            longitude=location.longitude,
-        )
-    except ValueError:
-        await state.finish()
-        await message.answer("Корзина пуста.", reply_markup=main_menu())
-        return
-    except RuntimeError as exc:
-        if str(exc) == "INSUFFICIENT_FUNDS":
-            await state.finish()
-            await message.answer(
-                "Недостаточно средств на балансе.",
-                reply_markup=main_menu(),
-            )
-            return
-        raise
-
-    await _notify_admins_about_order(
-        user=message.from_user,
-        order_id=order_id,
-        phone=data["phone"],
-        latitude=location.latitude,
-        longitude=location.longitude,
-    )
-
-    await state.finish()
+    await state.update_data(latitude=location.latitude, longitude=location.longitude, address=None)
+    
+    from keyboards.reply import skip_menu
+    await CheckoutState.waiting_for_promo.set()
     await message.answer(
-        f"✅ Заказ №{order_id} оформлен.\n"
-        f"📍 {_delivery_text(latitude=location.latitude, longitude=location.longitude)}",
-        reply_markup=main_menu(),
+        "🏷️ <b>Промокод</b>\n\n"
+        "Введите промокод (если есть) или нажмите кнопку <b>Пропустить</b> ниже:",
+        parse_mode="HTML",
+        reply_markup=skip_menu(),
     )
 
 
@@ -229,13 +202,63 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
         await message.answer("Адрес слишком короткий. Введи адрес подробнее.")
         return
 
+    await state.update_data(address=address, latitude=None, longitude=None)
+    
+    from keyboards.reply import skip_menu
+    await CheckoutState.waiting_for_promo.set()
+    await message.answer(
+        "🏷️ <b>Промокод</b>\n\n"
+        "Введите промокод (если есть) или нажмите кнопку <b>Пропустить</b> ниже:",
+        parse_mode="HTML",
+        reply_markup=skip_menu(),
+    )
+
+
+@dp.message_handler(state=CheckoutState.waiting_for_promo)
+async def checkout_promo(message: types.Message, state: FSMContext) -> None:
+    code = message.text.strip()
+    promo_code = None
+
+    if code != "Пропустить" and code != "/skip":
+        promo = await db.get_promo(code)
+        if not promo:
+            await message.answer(
+                "❌ Неверный или истекший промокод. Попробуйте еще раз или нажмите кнопку <b>Пропустить</b>:",
+                parse_mode="HTML",
+            )
+            return
+        
+        cart_items = await db.get_cart(message.from_user.id)
+        total_amount = sum(float(item["price"]) * int(item["quantity"]) for item in cart_items)
+        if promo.get("min_order_amount") and total_amount < float(promo["min_order_amount"]):
+            await message.answer(
+                f"❌ Этот промокод можно применить только к заказам от {float(promo['min_order_amount']):.2f} руб.\n"
+                f"Сумма вашей корзины: {total_amount:.2f} руб.\n"
+                "Попробуйте другой промокод или нажмите <b>Пропустить</b>:",
+                parse_mode="HTML",
+            )
+            return
+
+        promo_code = str(promo["code"])
+        await message.answer(
+            f"✅ Промокод <b>{promo_code}</b> успешно применён! Скидка: {int(promo['percent'])}%.",
+            parse_mode="HTML",
+        )
+
     data = await state.get_data()
+    phone = data["phone"]
+    address = data.get("address")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
 
     try:
         order_id = await db.create_order_from_cart(
             user_id=message.from_user.id,
-            phone=data["phone"],
+            phone=phone,
             address=address,
+            latitude=latitude,
+            longitude=longitude,
+            promo_code=promo_code,
         )
     except ValueError:
         await state.finish()
@@ -249,18 +272,36 @@ async def checkout_address(message: types.Message, state: FSMContext) -> None:
                 reply_markup=main_menu(),
             )
             return
+        elif str(exc) == "OUT_OF_STOCK":
+            await state.finish()
+            await message.answer(
+                "К сожалению, некоторые товары закончились на складе.",
+                reply_markup=main_menu(),
+            )
+            return
         raise
 
     await _notify_admins_about_order(
         user=message.from_user,
         order_id=order_id,
-        phone=data["phone"],
+        phone=phone,
         address=address,
+        latitude=latitude,
+        longitude=longitude,
     )
 
     await state.finish()
+    
+    orders = await db.get_user_orders(message.from_user.id)
+    order_detail = next((o for o in orders if o["id"] == order_id), None)
+    
+    confirm_text = f"✅ Заказ №{order_id} оформлен.\n"
+    if order_detail:
+        confirm_text += f"💰 Итоговая сумма к оплате (с учетом скидок): <b>{float(order_detail['total_amount']):.2f} руб.</b>\n"
+    confirm_text += f"📍 {_delivery_text(address=address, latitude=latitude, longitude=longitude)}"
+
     await message.answer(
-        f"✅ Заказ №{order_id} оформлен.\n"
-        f"📍 {_delivery_text(address=address)}",
+        confirm_text,
+        parse_mode="HTML",
         reply_markup=main_menu(),
     )

@@ -24,6 +24,21 @@ async def on_startup(_: object) -> None:
     await db.connect()
     await db.setup()
     await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Render.com Free Tier Compatibility Hack:
+    # A web service on Render Free Tier must bind to the injected $PORT,
+    # otherwise Render terminates the deployment after failing healthchecks.
+    port = os.environ.get("PORT")
+    if port:
+        from aiohttp import web
+        logging.info(f"Starting dummy HTTP server on port {port} for Render healthcheck")
+        app = web.Application()
+        app.router.add_get("/", lambda r: web.Response(text="Bot is running!"))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", int(port))
+        await site.start()
+        
     logging.info("Bot started")
 
 

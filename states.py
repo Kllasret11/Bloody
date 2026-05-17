@@ -76,3 +76,10 @@ class FindUserState(StatesGroup):
 
     waiting_for_reply = State()
 
+
+class AdminPromoState(StatesGroup):
+    waiting_for_code = State()
+    waiting_for_percent = State()
+    waiting_for_limit = State()
+    waiting_for_delete_code = State()
+

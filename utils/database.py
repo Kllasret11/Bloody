@@ -12,7 +12,7 @@ class Database:
         self._pool: Optional[asyncpg.Pool] = None
 
     async def connect(self) -> None:
-        self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5)
+        self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5, statement_cache_size=0)
 
     async def close(self) -> None:
         if self._pool is not None:
@@ -52,6 +52,8 @@ class Database:
                 username TEXT,
                 full_name TEXT NOT NULL,
                 balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+                referred_by BIGINT REFERENCES users(user_id),
+                referral_bonuses_earned NUMERIC(12,2) NOT NULL DEFAULT 0,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
@@ -280,6 +282,18 @@ class Database:
                     )
                     current = 1
 
+                if current < 2:
+                    await conn.execute(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT REFERENCES users(user_id)"
+                    )
+                    await conn.execute(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonuses_earned NUMERIC(12,2) NOT NULL DEFAULT 0"
+                    )
+                    await conn.execute(
+                        "INSERT INTO schema_migrations (version) VALUES (2) ON CONFLICT DO NOTHING"
+                    )
+                    current = 2
+
     async def upsert_user(self, user_id: int, username: str | None, full_name: str) -> None:
         await self.execute(
             """
@@ -299,6 +313,98 @@ class Database:
         return await self.fetchrow(
             "SELECT * FROM users WHERE user_id = $1",
             user_id,
+        )
+
+    async def register_user(self, user_id: int, username: str | None, full_name: str, referrer_id: int | None = None) -> bool:
+        user = await self.get_user(user_id)
+        if user:
+            await self.upsert_user(user_id, username, full_name)
+            return False
+
+        if referrer_id and referrer_id != user_id:
+            referrer = await self.get_user(referrer_id)
+            if referrer:
+                async with self.pool.acquire() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            """
+                            INSERT INTO users (user_id, username, full_name, referred_by)
+                            VALUES ($1, $2, $3, $4)
+                            """,
+                            user_id,
+                            username,
+                            full_name,
+                            referrer_id,
+                        )
+                        await conn.execute(
+                            """
+                            UPDATE users
+                            SET balance = balance + 100.0,
+                                referral_bonuses_earned = referral_bonuses_earned + 100.0
+                            WHERE user_id = $1
+                            """,
+                            referrer_id,
+                        )
+                        await conn.execute(
+                            """
+                            UPDATE users
+                            SET balance = balance + 50.0
+                            WHERE user_id = $1
+                            """,
+                            user_id,
+                        )
+                return True
+
+        await self.execute(
+            """
+            INSERT INTO users (user_id, username, full_name)
+            VALUES ($1, $2, $3)
+            """,
+            user_id,
+            username,
+            full_name,
+        )
+        return True
+
+    async def get_referrals_count(self, user_id: int) -> int:
+        count = await self.fetchval(
+            "SELECT COUNT(*) FROM users WHERE referred_by = $1",
+            user_id,
+        )
+        return int(count or 0)
+
+    async def get_referrals(self, user_id: int):
+        return await self.fetch(
+            "SELECT user_id, username, full_name, created_at FROM users WHERE referred_by = $1 ORDER BY created_at DESC",
+            user_id,
+        )
+
+    async def add_promo_code(self, code: str, percent: int, max_uses: int | None = None) -> None:
+        code = code.strip().upper()
+        await self.execute(
+            """
+            INSERT INTO promo_codes (code, percent, max_uses)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (code) DO UPDATE SET
+                percent = EXCLUDED.percent,
+                max_uses = EXCLUDED.max_uses,
+                is_active = TRUE
+            """,
+            code,
+            percent,
+            max_uses,
+        )
+
+    async def delete_promo_code(self, code: str) -> None:
+        code = code.strip().upper()
+        await self.execute(
+            "UPDATE promo_codes SET is_active = FALSE WHERE code = $1",
+            code,
+        )
+
+    async def get_all_promo_codes(self):
+        return await self.fetch(
+            "SELECT code, percent, max_uses, used_count, is_active FROM promo_codes ORDER BY created_at DESC"
         )
 
     async def change_balance(self, user_id: int, amount: float) -> None:

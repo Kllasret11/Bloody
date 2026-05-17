@@ -19,7 +19,7 @@ def admin_menu() -> ReplyKeyboardMarkup:
     kb.row(KeyboardButton("➕ Добавить товар"), KeyboardButton("➕ Добавить категорию"))
     kb.row(KeyboardButton("✏️ Редактировать товар"), KeyboardButton("✏️ Редактировать категорию"))
     kb.row(KeyboardButton("🗑 Удалить товар"), KeyboardButton("🗑 Удалить категорию"))
-    kb.row(KeyboardButton("💲 Изменить цену"), KeyboardButton("💰 Изменить баланс"))
+    kb.row(KeyboardButton("💲 Изменить цену"), KeyboardButton("💰 Изменить баланс"), KeyboardButton("🎟️ Промокоды"))
     kb.row(KeyboardButton("🆘 Обращения"), KeyboardButton("✉️ Ответить на SOS"))
     kb.row(KeyboardButton("🚪 Выйти из админки"))
     return kb
@@ -47,3 +47,9 @@ def location_request_menu() -> ReplyKeyboardMarkup:
 
 def remove_keyboard() -> ReplyKeyboardRemove:
     return ReplyKeyboardRemove()
+
+
+def skip_menu() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.add(KeyboardButton("Пропустить"))
+    return kb

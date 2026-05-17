@@ -10,6 +10,7 @@ from states import (
     AddBalanceState,
     AddCategoryState,
     AddProductState,
+    AdminPromoState,
     AdminReplySosState,
     DeleteCategoryState,
     DeleteProductState,
@@ -694,3 +695,173 @@ async def admin_find_user_finish(message: types.Message, state: FSMContext) -> N
     await db.log_admin_action(message.from_user.id, "find_user", {"user_id": user_id})
     await state.finish()
     await message.answer(text, reply_markup=admin_menu())
+
+
+# --- PROMO CODE MANAGEMENT ---
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+def admin_promo_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.row(
+        InlineKeyboardButton("➕ Создать", callback_data="admin_promo_create"),
+        InlineKeyboardButton("❌ Удалить", callback_data="admin_promo_delete")
+    )
+    kb.add(
+        InlineKeyboardButton("📋 Список промокодов", callback_data="admin_promo_list")
+    )
+    return kb
+
+
+@dp.message_handler(IsAdminSession(), lambda m: m.text == "🎟️ Промокоды", state="*")
+async def admin_promo_menu(message: types.Message, state: FSMContext) -> None:
+    await state.finish()
+    await message.answer(
+        "🎟️ <b>Управление промокодами</b>\n\n"
+        "Выберите действие ниже:",
+        parse_mode="HTML",
+        reply_markup=admin_promo_kb()
+    )
+
+
+@dp.callback_query_handler(IsAdminSession(), lambda c: c.data == "admin_promo_list", state="*")
+async def admin_promo_list_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await state.finish()
+    promos = await db.get_all_promo_codes()
+    if not promos:
+        await call.message.answer("Промокодов пока нет.")
+        await call.answer()
+        return
+
+    text = "📋 <b>Список промокодов:</b>\n\n"
+    for p in promos:
+        status = "🟢 Активен" if p["is_active"] else "🔴 Неактивен"
+        limit = f"{p['used_count']}/{p['max_uses']}" if p["max_uses"] is not None else f"{p['used_count']}/∞"
+        text += (
+            f"🔑 Код: <code>{p['code']}</code>\n"
+            f"🏷️ Скидка: <b>{p['percent']}%</b>\n"
+            f"📊 Использований: <b>{limit}</b>\n"
+            f"ℹ️ Статус: {status}\n\n"
+        )
+    await call.message.answer(text, parse_mode="HTML")
+    await call.answer()
+
+
+@dp.callback_query_handler(IsAdminSession(), lambda c: c.data == "admin_promo_create", state="*")
+async def admin_promo_create_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await state.finish()
+    await AdminPromoState.waiting_for_code.set()
+    await call.message.answer(
+        "📝 <b>Создание промокода</b>\n\n"
+        "Введите код промокода (например, <code>SALE30</code>):",
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+
+@dp.message_handler(IsAdminSession(), state=AdminPromoState.waiting_for_code)
+async def admin_promo_code_entered(message: types.Message, state: FSMContext) -> None:
+    code = message.text.strip().upper()
+    if len(code) < 3:
+        await message.answer("Код промокода должен состоять минимум из 3 символов. Попробуйте еще раз:")
+        return
+
+    await state.update_data(promo_code=code)
+    await AdminPromoState.waiting_for_percent.set()
+    await message.answer("🔢 Введите процент скидки (целое число от 1 до 100):")
+
+
+@dp.message_handler(IsAdminSession(), state=AdminPromoState.waiting_for_percent)
+async def admin_promo_percent_entered(message: types.Message, state: FSMContext) -> None:
+    try:
+        percent = int(message.text.strip())
+    except ValueError:
+        await message.answer("Процент скидки должен быть целым числом. Попробуйте еще раз:")
+        return
+
+    if not (1 <= percent <= 100):
+        await message.answer("Процент скидки должен быть в диапазоне от 1 до 100. Попробуйте еще раз:")
+        return
+
+    await state.update_data(percent=percent)
+    await AdminPromoState.waiting_for_limit.set()
+    await message.answer(
+        "📊 Введите лимит использований (целое число) или напишите /skip, если лимит не ограничен:"
+    )
+
+
+@dp.message_handler(IsAdminSession(), commands=["skip"], state=AdminPromoState.waiting_for_limit)
+async def admin_promo_limit_skipped(message: types.Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    code = data["promo_code"]
+    percent = data["percent"]
+
+    await db.add_promo_code(code, percent, None)
+    await db.log_admin_action(message.from_user.id, "add_promo_code", {"code": code, "percent": percent, "max_uses": None})
+    await state.finish()
+
+    await message.answer(
+        f"✅ Промокод <b>{code}</b> на скидку <b>{percent}%</b> успешно создан без ограничения использований!",
+        parse_mode="HTML",
+        reply_markup=admin_menu()
+    )
+
+
+@dp.message_handler(IsAdminSession(), state=AdminPromoState.waiting_for_limit)
+async def admin_promo_limit_entered(message: types.Message, state: FSMContext) -> None:
+    try:
+        limit = int(message.text.strip())
+    except ValueError:
+        await message.answer("Лимит должен быть целым числом или /skip. Попробуйте еще раз:")
+        return
+
+    if limit <= 0:
+        await message.answer("Лимит использований должен быть больше нуля. Попробуйте еще раз:")
+        return
+
+    data = await state.get_data()
+    code = data["promo_code"]
+    percent = data["percent"]
+
+    await db.add_promo_code(code, percent, limit)
+    await db.log_admin_action(message.from_user.id, "add_promo_code", {"code": code, "percent": percent, "max_uses": limit})
+    await state.finish()
+
+    await message.answer(
+        f"✅ Промокод <b>{code}</b> на скидку <b>{percent}%</b> с лимитом <b>{limit}</b> использований успешно создан!",
+        parse_mode="HTML",
+        reply_markup=admin_menu()
+    )
+
+
+@dp.callback_query_handler(IsAdminSession(), lambda c: c.data == "admin_promo_delete", state="*")
+async def admin_promo_delete_callback(call: types.CallbackQuery, state: FSMContext) -> None:
+    await state.finish()
+    await AdminPromoState.waiting_for_delete_code.set()
+    await call.message.answer(
+        "❌ <b>Деактивация промокода</b>\n\n"
+        "Введите код промокода, который вы хотите деактивировать:",
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+
+@dp.message_handler(IsAdminSession(), state=AdminPromoState.waiting_for_delete_code)
+async def admin_promo_delete_entered(message: types.Message, state: FSMContext) -> None:
+    code = message.text.strip().upper()
+    
+    # Check if exists
+    promo = await db.get_promo(code)
+    if not promo:
+        await message.answer("❌ Промокод не найден или уже неактивен. Введите другой код или /cancel для выхода:")
+        return
+
+    await db.delete_promo_code(code)
+    await db.log_admin_action(message.from_user.id, "delete_promo_code", {"code": code})
+    await state.finish()
+
+    await message.answer(
+        f"✅ Промокод <b>{code}</b> успешно деактивирован!",
+        parse_mode="HTML",
+        reply_markup=admin_menu()
+    )
